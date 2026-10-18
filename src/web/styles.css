@@ -1630,7 +1630,7 @@ select.ref-selector {
 .filelist.code-filelist .entry { align-items: center; padding: 7px var(--s4); gap: var(--s3); font-size: 14px; }
 .filelist.code-filelist .entry a { color: var(--text); }
 .filelist.code-filelist .entry a:hover { color: var(--accent); text-decoration: underline; }
-.filelist.code-filelist .entry:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.filelist.code-filelist .entry:hover { background: var(--bg-elevated); }
 
 .model-viewer { gap: var(--s3); }
 .model-stage {
@@ -1802,15 +1802,15 @@ kbd {
 .breadcrumbs .breadcrumb-root { font-weight: 600; }
 .breadcrumb-sep { margin: 0 4px; color: var(--text-faint); }
 
-.file-box { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg-elevated); }
-.file-box > .latest-commit { border: none; border-bottom: 1px solid var(--border); border-radius: 0; }
+.file-box { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); }
+.file-box > .latest-commit { border: none; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--bg-elevated); }
 .file-box > .filelist { border: none; border-radius: 0; }
 .file-box > .empty-state, .file-box > .error-banner { margin: var(--s4); }
 .code-filelist .entry-icon { color: var(--text-faint); }
 .code-filelist .entry-icon.is-dir { color: #54aeff; fill: color-mix(in srgb, #54aeff 35%, transparent); }
 .code-filelist .entry .size { font-variant-numeric: tabular-nums; }
 
-.readme-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); }
+.readme-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
 .readme-head {
   position: sticky; top: 64px; z-index: 2;
   display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s4);
@@ -1908,14 +1908,14 @@ kbd {
 }
 
 .card.thread-box-head {
-  padding: var(--s3) var(--s4); background: var(--bg-inset);
+  padding: var(--s3) var(--s4); background: var(--bg-elevated);
   border-bottom-left-radius: 0; border-bottom-right-radius: 0;
 }
 .card.thread-box-head .tabs.sub { border-bottom: none; margin: 0; }
 .card.thread-box-head .tabs.sub a { padding: 4px 8px; border-bottom: none; border-radius: 6px; color: var(--text-dim); }
 .card.thread-box-head .tabs.sub a.active { color: var(--text); font-weight: 600; background: var(--hover-bg, color-mix(in srgb, var(--text) 8%, transparent)); }
 main.container > .card.thread-box-head + .card.thread-box-body {
-  margin-top: 0; padding: 0; border-top: none;
+  margin-top: 0; padding: 0; border-top: none; background: var(--bg);
   border-top-left-radius: 0; border-top-right-radius: 0; overflow: hidden;
 }
 .card.thread-box-body > .empty-state, .card.thread-box-body > .error-banner, .card.thread-box-body > .spinner { margin: var(--s5); }
@@ -1925,7 +1925,7 @@ main.container > .card.thread-box-head + .card.thread-box-body {
   border-top: 1px solid var(--border); transition: background-color 80ms ease;
 }
 .thread-row:first-child { border-top: none; }
-.thread-row:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.thread-row:hover { background: var(--bg-elevated); }
 .thread-state { display: inline-flex; padding-top: 3px; flex-shrink: 0; }
 .thread-state.is-open { color: var(--success); }
 .thread-state.is-done { color: var(--merged, #a371f7); }

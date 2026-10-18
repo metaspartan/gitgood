@@ -146,7 +146,7 @@ function LatestCommit({
             {commit.message}
           </Link>
           <span className="spacer" />
-          <Link to={`/${owner}/${repo}/commit/${commit.sha}`} className="mono faint small" title={commit.sha}>
+          <Link to={`/${owner}/${repo}/commit/${commit.sha}`} className="latest-commit-sha mono small" title={commit.sha}>
             {commit.short_sha}
           </Link>
           <span className="faint small" title={new Date(commit.authored_at).toLocaleString()}>

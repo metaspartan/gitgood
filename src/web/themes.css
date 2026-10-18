@@ -21,15 +21,13 @@ html[data-theme-mode="light"] .image-checker { background-color: var(--bg-inset)
 
 html[data-theme] .header-brand, html[data-theme] .header-brand span { color: var(--text); -webkit-text-fill-color: var(--text); }
 
-html[data-theme] a { color: var(--link); }
-html[data-theme] a:hover { color: var(--link-hover); }
 html[data-theme] a.btn-primary, html[data-theme] a.btn-primary:hover { color: var(--btn-primary-text); }
 html[data-theme] a.header-brand, html[data-theme] a.repo-name { color: var(--text); }
 html[data-theme] a.header-nav-link { color: var(--text-dim); }
-html[data-theme] a.header-nav-link:hover, html[data-theme] a.header-nav-link[aria-current="page"] { background: var(--hover-bg); color: var(--link); }
+html[data-theme] a.header-nav-link:hover, html[data-theme] a.header-nav-link[aria-current="page"] { background: var(--hover-bg); color: var(--text); text-decoration: none; }
 html[data-theme] .header-notifications .header-count { color: var(--button-text); }
 html[data-theme] .header-account-panel a { color: var(--text); }
-html[data-theme] .header-account-panel a:hover { background: var(--hover-bg); color: var(--link); }
+html[data-theme] .header-account-panel a:hover { background: var(--hover-bg); color: var(--text); text-decoration: none; }
 html[data-theme] :focus-visible { outline-color: var(--focus-ring); }
 html[data-theme] ::selection { background: var(--selection-bg); color: var(--text); }
 html[data-theme] .tok-comment { color: var(--syntax-comment); }
@@ -43,9 +41,9 @@ html[data-theme] .tok-attr { color: var(--syntax-attr); }
 
 html[data-theme] a.skip-link, html[data-theme] a.skip-link:hover, html[data-theme] .nav-badge.has-count .pill-count { color: var(--button-text); }
 html[data-theme] a.code-ln { color: var(--text-faint); }
-html[data-theme] a.code-ln:hover, html[data-theme] .code-line.is-selected a.code-ln { color: var(--link); }
+html[data-theme] a.code-ln:hover, html[data-theme] .code-line.is-selected a.code-ln { color: var(--text); }
 html[data-theme] a.header-signin { color: var(--text); }
-html[data-theme] a.header-signin:hover { color: var(--link); background: var(--hover-bg); }
+html[data-theme] a.header-signin:hover { color: var(--text); background: var(--hover-bg); text-decoration: none; }
 html[data-theme] a.muted-link, html[data-theme] .code-toolbar-counts a { color: var(--text-dim); }
 html[data-theme] a.muted-link:hover, html[data-theme] .code-toolbar-counts a:hover { color: var(--link); }
 html[data-theme] a.btn-secondary, html[data-theme] a.btn-secondary:hover { color: var(--text); }
@@ -61,3 +59,12 @@ html[data-theme] a.repo-action-counter:hover { color: var(--link); }
 html[data-theme] a.action-menu-footer { color: var(--link); }
 html[data-theme] .people-tabs a { color: var(--text-dim); }
 html[data-theme] .people-tabs a.active, html[data-theme] .people-tabs a:hover { color: var(--text); }
+html[data-theme] .repo-band .repo-title a { color: var(--text); }
+html[data-theme] .repo-band .repo-title a:hover { color: var(--text); text-decoration: underline; }
+html[data-theme] a.latest-commit-sha { color: var(--text-dim); }
+html[data-theme] a.latest-commit-sha:hover { color: var(--link); }
+html[data-theme] .site-footer a:hover { color: var(--link); }
+html[data-theme] a.header-notifications:hover, html[data-theme] a.header-notifications[aria-current="page"] { color: var(--text); background: var(--hover-bg); border-color: transparent; }
+html[data-theme] a.topic-chip { color: var(--link); background: color-mix(in srgb, var(--link) 12%, transparent); border-color: transparent; }
+html[data-theme] a.topic-chip:hover { color: var(--btn-primary-text); background: var(--link); border-color: transparent; }
+html[data-theme] a.markdown-ref, html[data-theme] .markdown-body a { color: var(--link); }
