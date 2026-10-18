@@ -3,12 +3,12 @@ import { renderMarkdown } from "./markdown.tsx";
 import "./components/Markdown.css";
 import type { User } from "./types.ts";
 
-export function Avatar({ user, size = "sm" }: { user: Pick<User, "username" | "display_name" | "avatar_hue">; size?: "sm" | "lg" }): ReactNode {
+export function Avatar({ user, size = "sm" }: { user: Pick<User, "username" | "display_name" | "avatar_hue">; size?: "sm" | "lg" | "xl" }): ReactNode {
   const initials = user.display_name.slice(0, 2);
   const background = `hsl(${user.avatar_hue} 72% 62%)`;
   return (
     <span
-      className={`avatar${size === "lg" ? " lg" : ""}`}
+      className={`avatar${size === "sm" ? "" : ` ${size}`}`}
       style={{ background }}
       title={user.username}
       aria-hidden="true"

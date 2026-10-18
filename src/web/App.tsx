@@ -6,6 +6,7 @@ import { Link, navigate, parseLocation, useLocation } from "./router.tsx";
 import type { User } from "./types.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { LoginPage } from "./pages/Auth.tsx";
+import { KeyboardShortcuts } from "./components/KeyboardShortcuts.tsx";
 
 const { RepoPage, RepoShell } = {
   RepoPage: lazy(() => import("./pages/Repo.tsx").then((m) => ({ default: m.RepoPage }))),
@@ -17,6 +18,7 @@ const { MilestoneListPage, MilestoneDetailPage } = {
 };
 const ConfigurationPage = lazy(() => import("./pages/Configuration.tsx").then((m) => ({ default: m.ConfigurationPage })));
 const BackupsPage = lazy(() => import("./pages/Backups.tsx").then((m) => ({ default: m.BackupsPage })));
+const ForkPage = lazy(() => import("./pages/ForkPage.tsx").then((m) => ({ default: m.ForkPage })));
 const RepoPeoplePage = lazy(() => import("./pages/RepoPeople.tsx").then((m) => ({ default: m.RepoPeoplePage })));
 const AdminPage = lazy(() => import("./pages/AdminPage.tsx").then((m) => ({ default: m.AdminPage })));
 const NewPullPage = lazy(() => import("./components/ComparePrompt.tsx").then((m) => ({ default: m.NewPullPage })));
@@ -142,6 +144,7 @@ export function App(): ReactNode {
             </Suspense>
           )}
         </main>
+        <KeyboardShortcuts />
         <footer className="site-footer">
           <div className="footer-inner">
             <span>GitGood — Git over the smart HTTP protocol</span>
@@ -221,6 +224,13 @@ function RouteView({ location }: { location: string }): ReactNode {
           ) : (
             <IssueListPage owner={owner} repo={repo} state={search.get("state") ?? "open"} />
           )}
+        </RepoShell>
+      );
+    }
+    if (section === "fork" && !tail) {
+      return (
+        <RepoShell owner={owner} repo={repo} activeTab="code">
+          <ForkPage owner={owner} repo={repo} />
         </RepoShell>
       );
     }

@@ -395,7 +395,7 @@ docker compose --profile runner up -d runner`}</pre>
           <tbody aria-busy={list.loading}>
             {(list.data?.items ?? []).map((runner) => (
               <tr key={runner.id}>
-                <td><strong>{runner.name}</strong><div className="small faint mono">{runner.token_prefix}\u2026</div></td>
+                <td><strong>{runner.name}</strong><div className="small faint mono">{runner.token_prefix}…</div></td>
                 <td>
                   <span className={`runner-dot ${runner.paused ? "is-paused" : runner.online ? "is-online" : "is-offline"}`} aria-hidden="true" />
                   {runner.paused ? "Paused" : runner.online ? "Online" : "Offline"}

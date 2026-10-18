@@ -1,8 +1,9 @@
 import { json } from "../../lib/http.ts";
 import { notFound } from "../../lib/errors.ts";
-import { all, scalar } from "../../db/index.ts";
+import { all } from "../../db/index.ts";
 import { findUserByUsername, toPublicUser, type UserRow } from "../../auth/service.ts";
 import { canRead, listReposByOwner, statsFromCounts } from "../../data/repos.ts";
+import { listStarredByUser } from "../../data/stars.ts";
 import { repoJson, userJson } from "../serialize.ts";
 import { param } from "../helpers.ts";
 import type { Router } from "../router.ts";
@@ -25,15 +26,22 @@ export function registerUserRoutes(router: Router): void {
   router.get("/api/users/:username", (ctx) => {
     const row = findUserByUsername(param(ctx, "username"));
     if (!row) throw notFound("User not found");
-    const repoCount =
-      scalar<number>("SELECT COUNT(*) FROM repos WHERE owner_id = ? AND org_id IS NULL", row.id) ?? 0;
-    return json({ ...userJson(toPublicUser(row)), repo_count: repoCount });
+    const repoCount = listReposByOwner(row.id).filter((repo) => canRead(repo, ctx.auth)).length;
+    const starCount = listStarredByUser(row.id, 1000).filter((repo) => canRead(repo, ctx.auth)).length;
+    return json({ ...userJson(toPublicUser(row)), repo_count: repoCount, star_count: starCount });
   });
 
   router.get("/api/users/:username/repos", (ctx) => {
     const row = findUserByUsername(param(ctx, "username"));
     if (!row) throw notFound("User not found");
     const repos = listReposByOwner(row.id).filter((repo) => canRead(repo, ctx.auth));
+    return json({ items: repos.map((repo) => ({ ...repoJson(repo), ...statsFromCounts(repo) })) });
+  });
+
+  router.get("/api/users/:username/starred", (ctx) => {
+    const row = findUserByUsername(param(ctx, "username"));
+    if (!row) throw notFound("User not found");
+    const repos = listStarredByUser(row.id, 1000).filter((repo) => canRead(repo, ctx.auth));
     return json({ items: repos.map((repo) => ({ ...repoJson(repo), ...statsFromCounts(repo) })) });
   });
 }

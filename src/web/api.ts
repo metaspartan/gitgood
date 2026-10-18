@@ -352,6 +352,8 @@ export const api = {
   user: (username: string) => request<User>(`/api/users/${encodeURIComponent(username)}`),
   userRepos: (username: string) =>
     request<{ items: Repo[] }>(`/api/users/${encodeURIComponent(username)}/repos`),
+  userStarred: (username: string) =>
+    request<{ items: Repo[] }>(`/api/users/${encodeURIComponent(username)}/starred`),
   search: (query: string, type?: string) =>
     request<SearchResults>(
       `/api/search?q=${encodeURIComponent(query)}${type ? `&type=${encodeURIComponent(type)}` : ""}`,

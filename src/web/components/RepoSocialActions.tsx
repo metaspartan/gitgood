@@ -36,6 +36,11 @@ export function useSocialCounts(owner: string, repo: string): SocialState | null
   return state;
 }
 
+export function ownedForks<T extends { owner: string }>(forks: readonly T[], username: string, orgNames: readonly string[]): T[] {
+  const owners = new Set([username, ...orgNames].map((name) => name.toLowerCase()));
+  return forks.filter((fork) => owners.has(fork.owner.toLowerCase()));
+}
+
 export function compactCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 10_000) return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}k`;
@@ -64,8 +69,13 @@ export function RepoSocialActions({ owner, repo }: { owner: string; repo: string
   const parent = useAsync(() => api.forkParent(owner, repo), [owner, repo]);
   const [state, setState] = useState<SocialState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [forking, setForking] = useState(false);
   const watchMenu = usePopover<HTMLDivElement>();
+  const forkMenu = usePopover<HTMLDivElement>();
+  const myOrgs = useAsync(() => (forkMenu.open && user ? api.myOrgs() : Promise.resolve(null)), [forkMenu.open, user?.id]);
+  const forks = useAsync(() => (forkMenu.open ? api.forks(owner, repo) : Promise.resolve(null)), [forkMenu.open, owner, repo]);
+  const mine = forkMenu.open && user && forks.data && myOrgs.data !== undefined
+    ? ownedForks(forks.data.items, user.username, (myOrgs.data?.items ?? []).map((org) => org.name))
+    : null;
 
   useEffect(() => {
     if (social.data) setState(social.data);
@@ -113,17 +123,9 @@ export function RepoSocialActions({ owner, repo }: { owner: string; repo: string
     void optimistic(applyWatchLevel(current, next), () => api.setWatchLevel(owner, repo, next));
   };
 
-  const fork = async (): Promise<void> => {
+  const fork = (): void => {
     if (!requireUser()) return;
-    setForking(true);
-    setError(null);
-    try {
-      const created = await api.fork(owner, repo);
-      navigate(`/${created.owner}/${created.name}`);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not fork this repository");
-      setForking(false);
-    }
+    navigate(`/${owner}/${repo}/fork`);
   };
 
   const loading = !current;
@@ -178,14 +180,45 @@ export function RepoSocialActions({ owner, repo }: { owner: string; repo: string
         ) : null}
       </div>
 
-      <div className="btn-group">
-        <button type="button" className="repo-action" disabled={forking || loading} onClick={() => void fork()} title="Fork your own copy of this repository">
+      <div className="btn-group" ref={forkMenu.ref}>
+        <button type="button" className="repo-action" disabled={loading} onClick={fork} title="Fork your own copy of this repository">
           <Icon name="fork" />
-          <span>{forking ? "Forking\u2026" : "Fork"}</span>
+          <span>Fork</span>
         </button>
         <Link to={`/${owner}/${repo}/forks`} className="repo-action repo-action-counter" ariaLabel={`${current?.forks ?? 0} forks`}>
           {compactCount(current?.forks ?? 0)}
         </Link>
+        <button
+          type="button"
+          className="repo-action repo-action-caret-only"
+          aria-label="See your forks of this repository"
+          aria-haspopup="menu"
+          aria-expanded={forkMenu.open}
+          disabled={loading}
+          onClick={() => (user ? forkMenu.setOpen((value) => !value) : requireUser())}
+        >
+          <Icon name="chevron" className="repo-action-caret" />
+        </button>
+        {forkMenu.open ? (
+          <div className="action-menu" role="menu" aria-label="Your forks">
+            <div className="action-menu-title">Existing forks</div>
+            {mine === null ? (
+              <div className="action-menu-empty"><span className="skeleton-text" style={{ width: "70%" }} /></div>
+            ) : mine.length === 0 ? (
+              <div className="action-menu-empty small muted">You don’t have any forks of this repository.</div>
+            ) : (
+              mine.map((item) => (
+                <Link key={item.id} to={`/${item.owner}/${item.name}`} className="action-menu-item action-menu-link" onClick={() => forkMenu.setOpen(false)}>
+                  <span className="action-menu-check" aria-hidden="true"><Icon name="fork" /></span>
+                  <span className="action-menu-text"><strong>{item.owner}/{item.name}</strong></span>
+                </Link>
+              ))
+            )}
+            <Link to={`/${owner}/${repo}/fork`} className="action-menu-footer" onClick={() => forkMenu.setOpen(false)}>
+              <Icon name="plus" /> Create a new fork
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       <div className="btn-group">

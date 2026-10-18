@@ -1993,3 +1993,31 @@ html[data-theme] a.thread-title:hover, a.thread-title:hover { color: var(--link,
   html[data-theme] a.thread-title, a.thread-title { font-size: 15px; }
   .thread-aside { flex-direction: column; align-items: flex-end; gap: 4px; }
 }
+
+.repo-action.repo-action-caret-only { padding: 0 6px; }
+.repo-action-caret-only .repo-action-caret { margin: 0; }
+.action-menu-empty { padding: 10px 16px; }
+a.action-menu-item.action-menu-link { text-decoration: none; }
+a.action-menu-footer { display: flex; align-items: center; gap: 6px; }
+.fork-page { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--s3); }
+.fork-title { margin: 0; font-size: 24px; font-weight: 600; }
+.fork-lede { margin: 0 0 var(--s3); padding-bottom: var(--s4); border-bottom: 1px solid var(--border); }
+.fork-form { display: flex; flex-direction: column; gap: var(--s3); }
+.fork-row { display: flex; align-items: flex-end; gap: var(--s2); flex-wrap: wrap; }
+.fork-field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; min-width: 0; }
+.fork-field input, .fork-field select { height: 32px; font-weight: 400; }
+.fork-grow { flex: 1; min-width: 200px; }
+.fork-owner { display: inline-flex; align-items: center; gap: var(--s2); }
+.fork-owner select { width: auto; min-width: 140px; }
+.fork-slash { padding-bottom: 6px; font-size: 20px; color: var(--text-dim); }
+.fork-note { display: flex; align-items: center; gap: 6px; padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-inset); }
+.fork-actions { display: flex; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--border); }
+.avatar.xl { width: 96px; height: 96px; font-size: 36px; }
+.shortcut-dialog { width: min(720px, 100%); max-height: 80vh; overflow: auto; padding: var(--s5); background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-lg, 0 16px 48px rgb(0 0 0 / .45)); }
+.shortcut-dialog h2 { margin: 0 0 var(--s4); font-size: 20px; }
+.shortcut-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s5); }
+.shortcut-groups h3 { margin: 0 0 var(--s2); font-size: 14px; color: var(--text-dim); font-weight: 600; }
+.shortcut-groups dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; font-size: 14px; }
+.shortcut-groups dt { display: inline-flex; gap: 4px; }
+.shortcut-groups dd { margin: 0; color: var(--text); }
+.shortcut-pending { position: fixed; z-index: 120; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md, 0 4px 16px rgb(0 0 0 / .3)); font-size: 13px; }

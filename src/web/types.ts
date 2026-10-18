@@ -7,6 +7,7 @@ export interface User {
   created_at: number;
   email?: string;
   repo_count?: number;
+  star_count?: number;
 }
 
 export interface Repo {
@@ -27,6 +28,8 @@ export interface Repo {
   openPulls?: number;
   lfsObjects?: number;
   lfsBytes?: number;
+  stars?: number;
+  forks?: number;
   stats?: RepoStats;
   permissions?: { read: boolean; write: boolean };
 }
