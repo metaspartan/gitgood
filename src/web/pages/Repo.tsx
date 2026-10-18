@@ -28,6 +28,7 @@ import { TopicBadges } from "./repo/TopicsPanel.tsx";
 import { Icon, type IconName } from "../components/Icons.tsx";
 import { RepoSocialActions, useSocialCounts } from "../components/RepoSocialActions.tsx";
 import { usePopover } from "../use-popover.ts";
+import { copyText } from "../clipboard.ts";
 import { FileFinder, useFinderShortcut } from "../components/FileFinder.tsx";
 import type { Repo } from "../types.ts";
 
@@ -201,6 +202,7 @@ function RefSelector({
   const tags = useAsync(() => api.tags(owner, repo), [owner, repo]);
   return (
     <select value={current} onChange={(event) => onSelect(event.target.value)} className="ref-selector" aria-label="Branch or tag">
+      {[...(branches.data?.items ?? []), ...(tags.data?.items ?? [])].some((item) => item.name === current) ? null : <option value={current}>{current}</option>}
       {(branches.data?.items ?? []).length > 0 ? (
         <optgroup label="Branches">
           {branches.data?.items.map((branch: Branch) => (
@@ -308,7 +310,7 @@ function CodeBrowser({
             ))}
           </div>
         ) : (tree.data?.items.length ?? 0) === 0 ? (
-          <EmptyState title="This repository is empty" hint={`Push to ${ref} to get started.`} />
+          <QuickSetup owner={owner} repo={repo} branch={ref} canWrite={canWrite} />
         ) : (
           <div className="filelist code-filelist">
             {path ? (
@@ -367,6 +369,57 @@ function CodeBrowser({
     <div className="repo-code-layout">
       {main}
       <AboutSidebar owner={owner} repo={repo} refName={ref} detail={detail} />
+    </div>
+  );
+}
+
+function CommandBlock({ label, lines }: { label: string; lines: string[] }): ReactNode {
+  const [copied, setCopied] = useState(false);
+  const text = lines.join("\n");
+  return (
+    <section className="setup-block">
+      <h3 className="setup-heading">{label}</h3>
+      <div className="setup-code">
+        <pre className="mono">{text}</pre>
+        <button
+          type="button"
+          className="btn-secondary icon-only setup-copy"
+          aria-label={copied ? "Copied" : `Copy: ${label}`}
+          title={copied ? "Copied" : "Copy"}
+          onClick={() => void copyText(text).then((ok) => { if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); } })}
+        >
+          <Icon name={copied ? "check" : "copy"} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function QuickSetup({ owner, repo, branch, canWrite }: { owner: string; repo: string; branch: string; canWrite: boolean }): ReactNode {
+  const url = `${window.location.origin}/${owner}/${repo}.git`;
+  if (!canWrite) {
+    return <EmptyState title="This repository is empty" hint="Nothing has been pushed here yet." />;
+  }
+  return (
+    <div className="quick-setup">
+      <div className="setup-intro">
+        <h2 className="setup-title">Quick setup — if you’ve done this kind of thing before</h2>
+        <div className="clone-field">
+          <span className="badge">HTTPS</span>
+          <input readOnly value={url} className="mono" aria-label="Clone URL" onFocus={(event) => event.target.select()} />
+          <button type="button" className="btn-secondary icon-only" aria-label="Copy clone URL" onClick={() => void copyText(url)}>
+            <Icon name="copy" />
+          </button>
+        </div>
+        <p className="small muted">
+          Get started by <Link to={`/${owner}/${repo}/new/${branch}`}>creating a new file</Link>. We recommend every repository include a README, LICENSE and .gitignore.
+        </p>
+      </div>
+      <CommandBlock
+        label="…or create a new repository on the command line"
+        lines={[`echo "# ${repo}" >> README.md`, "git init", "git add README.md", 'git commit -m "first commit"', `git branch -M ${branch}`, `git remote add origin ${url}`, `git push -u origin ${branch}`]}
+      />
+      <CommandBlock label="…or push an existing repository from the command line" lines={[`git remote add origin ${url}`, `git branch -M ${branch}`, `git push -u origin ${branch}`]} />
     </div>
   );
 }

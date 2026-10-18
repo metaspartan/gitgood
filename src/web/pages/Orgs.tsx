@@ -283,7 +283,7 @@ export function OrgPage({ name }: { name: string }): ReactNode {
           <span className="faint small">{repoItems.length}</span>
           <span className="spacer" />
           {viewerRole ? (
-            <Link to={`/new?organization=${encodeURIComponent(data.name)}`} className="button-link small">
+            <Link to={`/new?organization=${encodeURIComponent(data.name)}`} className="btn-secondary small">
               New repository
             </Link>
           ) : null}

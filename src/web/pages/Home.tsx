@@ -128,7 +128,7 @@ export function HomePage({ focusCreate = false }: { focusCreate?: boolean }): Re
       {!focusCreate ? (
         <header className="home-heading">
           <div><p className="home-eyebrow">YOUR GIT WORKSPACE</p><h1>Repositories</h1><p className="muted">Browse code, collaborate, and ship your next release.</p></div>
-          <Link to={user ? "/new" : "/login"} className="button-link home-create-action">{user ? "New repository" : "Sign in to create"}</Link>
+          <Link to={user ? "/new" : "/login"} className="btn-primary home-create-action">{user ? "New repository" : "Sign in to create"}</Link>
         </header>
       ) : <header className="home-heading"><div><Link to="/">← Repositories</Link><h1>New repository</h1><p className="muted">Choose a home for your code. Connect your local project when you’re ready.</p></div></header>}
 
@@ -143,7 +143,7 @@ export function HomePage({ focusCreate = false }: { focusCreate?: boolean }): Re
               <Link to={`/${created.owner}/${created.name}`}>open it and add a file</Link>.
             </div>
           </div>
-          <Link to={`/${created.owner}/${created.name}`} className="button-link small">
+          <Link to={`/${created.owner}/${created.name}`} className="btn-secondary small">
             Open repository
           </Link>
         </div>

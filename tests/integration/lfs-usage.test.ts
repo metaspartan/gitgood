@@ -81,10 +81,14 @@ describe("lfs usage", () => {
     expect(await stats("one")).toMatchObject({ lfsObjects: 1, lfsBytes: first.size });
   });
 
-  test("an object already in the store is linked when a second repository declares it", async () => {
+  test("an object already in the store is linked to a second repository only after that repository uploads the bytes", async () => {
     const declared = await batch("two", owner, "upload", [{ oid: first.oid, size: first.size }]);
-    expect(declared.data.objects[0]!.actions).toBeUndefined();
+    expect(declared.data.objects[0]!.actions).toBeDefined();
+    expect(await stats("two")).toMatchObject({ lfsObjects: 0, lfsBytes: 0 });
+    expect(await upload("two", first)).toBe(200);
     expect(await stats("two")).toMatchObject({ lfsObjects: 1, lfsBytes: first.size });
+    const again = await batch("two", owner, "upload", [{ oid: first.oid, size: first.size }]);
+    expect(again.data.objects[0]!.actions).toBeUndefined();
   });
 
   test("declaring an object that is never uploaded adds no usage", async () => {

@@ -70,15 +70,29 @@ function prefetchRoutes(): void {
   });
 }
 
+export function readBootSession(doc: Pick<Document, "querySelector"> = document): { user: User | null } | undefined {
+  const content = doc.querySelector<HTMLMetaElement>('meta[name="gg-session"]')?.content;
+  if (content === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(content) as { user?: User | null } | null;
+    return { user: parsed?.user ?? null };
+  } catch {
+    return undefined;
+  }
+}
+
+const bootSession = typeof document === "undefined" ? undefined : readBootSession();
+
 export function App(): ReactNode {
   useEffect(prefetchRoutes, []);
   const location = useLocation();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(bootSession?.user ?? null);
+  const [loading, setLoading] = useState(bootSession === undefined);
   const [nonce, setNonce] = useState(0);
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
+    if (nonce === 0 && bootSession !== undefined) return;
     let cancelled = false;
     api
       .me()

@@ -102,6 +102,7 @@ export async function backfillLfsUsage(): Promise<{ scanned: number; failed: num
     const pending = all<{ id: number }>(
       `SELECT r.id FROM repos r
         WHERE NOT EXISTS (SELECT 1 FROM lfs_repo_scans s WHERE s.repo_id = r.id)
+          AND r.created_at < COALESCE((SELECT value FROM instance_settings WHERE key = 'lfs_link_cutoff'), 0)
         ORDER BY r.id`,
     );
     for (const repo of pending) {

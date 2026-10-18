@@ -103,6 +103,7 @@ export function migrate(): void {
   addColumnIfMissing("access_tokens", "repo_id", "INTEGER REFERENCES repos(id) ON DELETE CASCADE");
   db.exec("CREATE INDEX IF NOT EXISTS idx_tokens_repo ON access_tokens(repo_id)");
   db.exec("CREATE TABLE IF NOT EXISTS instance_settings (key TEXT PRIMARY KEY, value INTEGER NOT NULL CHECK (value >= 0 AND value <= 1125899906842624))");
+  db.prepare("INSERT OR IGNORE INTO instance_settings (key, value) VALUES ('lfs_link_cutoff', ?)").run(Date.now());
   db.exec("CREATE TABLE IF NOT EXISTS instance_appearance (id INTEGER PRIMARY KEY CHECK(id=1), theme TEXT NOT NULL)");
   backfillSearchIndex();
   migrated = true;

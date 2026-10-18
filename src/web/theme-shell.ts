@@ -1,5 +1,7 @@
 import { one } from "../db/index.ts";
 import { readCookie } from "../lib/http.ts";
+import { findUserById, principalForSession, SESSION_COOKIE } from "../auth/service.ts";
+import { selfUserJson } from "../api/serialize.ts";
 import { themeById, themeVariables, type ThemeId } from "./themes.ts";
 
 export const THEME_COOKIE = "gg_theme";
@@ -48,7 +50,23 @@ function declarations(id: ThemeId): string {
     .join(";");
 }
 
+export const SESSION_META = '<meta name="gg-session" content="null" />';
+
+export function escapeAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function shellSessionJson(request: Request): string | null {
+  const cookie = readCookie(request, SESSION_COOKIE);
+  if (!cookie) return null;
+  const principal = principalForSession(cookie);
+  if (!principal) return null;
+  const user = findUserById(principal.userId);
+  return user ? JSON.stringify({ user: selfUserJson(user) }) : null;
+}
+
 export function renderThemedShell(source: string, theme: ShellTheme): string {
+  source = source.replace("</head>", `${SESSION_META}</head>`);
   if (theme.kind === "fixed") {
     const meta = themeById(theme.id)!;
     const bg = themeVariables(theme.id)["--bg"] ?? "";
@@ -62,6 +80,18 @@ export function renderThemedShell(source: string, theme: ShellTheme): string {
     .replace("</head>", `<style id="theme-boot">${css}</style></head>`);
 }
 
+function variantOf(html: Uint8Array<ArrayBuffer>): Variant {
+  const hasher = new Bun.CryptoHasher("sha1");
+  hasher.update(html);
+  return { html, gzip: html.byteLength > 512 ? Bun.gzipSync(html) : null, etag: `W/"shell-${hasher.digest("hex").slice(0, 16)}"` };
+}
+
+export function personalizedShell(base: Variant, sessionJson: string | null): Variant {
+  if (!sessionJson) return base;
+  const text = new TextDecoder().decode(base.html).replace(SESSION_META, `<meta name="gg-session" content="${escapeAttribute(sessionJson)}" />`);
+  return variantOf(new TextEncoder().encode(text));
+}
+
 export function themedShell(indexHtml: Uint8Array, theme: ShellTheme): Variant {
   if (variantSource !== indexHtml) {
     variants.clear();
@@ -70,10 +100,7 @@ export function themedShell(indexHtml: Uint8Array, theme: ShellTheme): Variant {
   const key = theme.kind === "fixed" ? `f:${theme.id}` : `s:${theme.light}:${theme.dark}`;
   const cached = variants.get(key);
   if (cached) return cached;
-  const html = new TextEncoder().encode(renderThemedShell(new TextDecoder().decode(indexHtml), theme));
-  const hasher = new Bun.CryptoHasher("sha1");
-  hasher.update(html);
-  const variant: Variant = { html, gzip: html.byteLength > 512 ? Bun.gzipSync(html) : null, etag: `W/"shell-${hasher.digest("hex").slice(0, 16)}"` };
+  const variant = variantOf(new TextEncoder().encode(renderThemedShell(new TextDecoder().decode(indexHtml), theme)));
   variants.set(key, variant);
   while (variants.size > MAX_VARIANTS) variants.delete(variants.keys().next().value as string);
   return variant;

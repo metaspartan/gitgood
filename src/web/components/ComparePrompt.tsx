@@ -51,7 +51,7 @@ export function ComparePrompt({ owner, repo, currentRef, defaultBranch }: {
       </span>
       <Link
         to={`/${owner}/${repo}/pulls/new?head=${encodeURIComponent(branch!)}&base=${encodeURIComponent(defaultName)}`}
-        className="button-link compare-action"
+        className="btn-primary compare-action"
       >
         Create pull request
       </Link>

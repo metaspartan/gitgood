@@ -1,11 +1,12 @@
 import { config } from "../config.ts";
-import { badRequest, forbidden, notFound, unauthorized } from "../lib/errors.ts";
+import { badRequest, forbidden, notFound, unauthorized, unprocessable } from "../lib/errors.ts";
 import { publicOrigin, readJson } from "../lib/http.ts";
 import * as v from "../lib/validate.ts";
 import { increment, observe } from "../lib/metrics.ts";
 import { canRead, canWrite, type RepoRecord } from "../data/repos.ts";
 import { createLock, deleteLock, listLocks } from "./locks.ts";
-import { isValidOid, objectExists, objectStat, putObjectFromStream, readObject } from "./store.ts";
+import { isValidOid, objectExists, objectStat, putObjectFromStream, readObject, streamMatchesOid } from "./store.ts";
+import { repoCanAccessObject } from "./access.ts";
 import { recordRepoObject } from "./usage.ts";
 import type { Auth } from "../auth/service.ts";
 
@@ -112,8 +113,7 @@ async function handleBatch(
     }
 
     if (isUpload) {
-      if (objectExists(declared.oid)) {
-        recordRepoObject(repo.id, declared.oid);
+      if (objectExists(declared.oid) && repoCanAccessObject(repo, declared.oid)) {
         objects.push({ oid: declared.oid, size: declared.size, authenticated });
         continue;
       }
@@ -128,7 +128,7 @@ async function handleBatch(
       continue;
     }
 
-    const stat = objectStat(declared.oid);
+    const stat = repoCanAccessObject(repo, declared.oid) ? objectStat(declared.oid) : null;
     if (!stat) {
       objects.push({
         oid: declared.oid,
@@ -160,6 +160,12 @@ async function handleUpload(
   assertWriteAccess(repo, auth);
   if (!request.body) throw badRequest("Missing LFS object body");
   const started = performance.now();
+  if (isValidOid(oid) && objectExists(oid) && !repoCanAccessObject(repo, oid)) {
+    if (!(await streamMatchesOid(request.body, oid))) throw unprocessable("Uploaded content does not match the object id");
+    recordRepoObject(repo.id, oid);
+    increment("lfs_objects_deduplicated_total");
+    return new Response(null, { status: 200, headers: { "content-type": LFS_CONTENT_TYPE, "cache-control": "no-store" } });
+  }
   const result = await putObjectFromStream(oid, request.body);
   recordRepoObject(repo.id, oid);
   increment(result.stored ? "lfs_objects_stored_total" : "lfs_objects_deduplicated_total");
@@ -172,7 +178,7 @@ async function handleUpload(
 
 function handleDownload(repo: RepoRecord, auth: Auth, oid: string): Response {
   assertReadAccess(repo, auth);
-  if (!objectExists(oid)) throw notFound("LFS object not found");
+  if (!isValidOid(oid) || !objectExists(oid) || !repoCanAccessObject(repo, oid)) throw notFound("LFS object not found");
   increment("lfs_objects_served_total");
   return readObject(oid);
 }

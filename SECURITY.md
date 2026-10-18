@@ -20,3 +20,7 @@ Out of scope: vulnerabilities that require an already-compromised administrator 
 - Private repositories answer 404 to anyone without access.
 - Webhook destinations on private, loopback and link-local networks are refused by default.
 - CI jobs run on external runners, never inside the server process.
+- Git LFS objects are deduplicated on disk but scoped per repository: a repository can only download objects it uploaded (or inherited from the repository it was forked from); claiming an existing object requires uploading matching bytes.
+- Password guessing is throttled per account on every path that accepts a password, including HTTP Basic auth for Git and the API, and two-factor codes.
+- Webhook deliveries never follow redirects and refuse private, loopback and link-local destinations.
+- Markdown is rendered by an in-house parser straight to React elements; raw HTML is shown as text and only http(s), mailto, irc(s) and xmpp links are kept.

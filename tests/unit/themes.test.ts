@@ -47,7 +47,11 @@ test("every palette defines dynamic interaction and syntax colors without inheri
     for (const name of required) expect(vars[name]).toBeTruthy();
     expect(vars["--link"]).toBe(theme.colors[8]);
     expect(vars["--link-hover"]).toContain(theme.colors[8]);
-    expect(vars["--hover-bg"]).toContain(theme.colors[1]);
+    expect(vars["--hover-bg"]).toContain(theme.colors[6]);
+    expect(vars["--btn-bg"]).toContain(theme.colors[1]);
+    expect(contrast(vars["--btn-primary-bg"]!, vars["--btn-primary-text"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(vars["--btn-primary-hover-bg"]!, vars["--btn-primary-text"]!)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(vars["--btn-danger-hover-bg"]!, vars["--btn-danger-hover-text"]!)).toBeGreaterThanOrEqual(4.5);
     expect(vars["--accent-hover"]).not.toBe(vars["--accent"]);
   }
 });

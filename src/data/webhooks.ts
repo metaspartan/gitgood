@@ -172,8 +172,13 @@ async function attemptDelivery(hook: WebhookRow, event: string, body: string): P
       method: "POST",
       headers,
       body,
+      redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      return { ok: false, status: response.status, error: "redirect_not_followed", transient: false };
+    }
     if (response.ok) return { ok: true, status: response.status, error: null, transient: false };
     const transient = response.status === 429 || response.status >= 500;
     return { ok: false, status: response.status, error: null, transient };

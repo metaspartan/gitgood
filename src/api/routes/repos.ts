@@ -62,6 +62,7 @@ import {
   parseArchiveFormat,
 } from "../../git/archive.ts";
 import { parseLfsPointer } from "../../lfs/pointer.ts";
+import { repoCanAccessObject } from "../../lfs/access.ts";
 import { objectFile, objectStat, readObjectBytes, readObjectHead } from "../../lfs/store.ts";
 import { GIT_REF_PATTERN } from "../../lib/ids.ts";
 import {
@@ -152,6 +153,11 @@ const README_CANDIDATES = [
 
 function permissionsFor(ctx: RouteContext, repo: RepoRecord): Record<string, boolean> {
   return { read: canRead(repo, ctx.auth), write: canWrite(repo, ctx.auth) };
+}
+
+function lfsPointerFor(repo: RepoRecord, bytes: Uint8Array) {
+  const pointer = parseLfsPointer(bytes);
+  return pointer && repoCanAccessObject(repo, pointer.oid) ? pointer : null;
 }
 
 export function registerRepoRoutes(router: Router): void {
@@ -389,7 +395,7 @@ export function registerRepoRoutes(router: Router): void {
     let bytes = blob.bytes;
     let size = blob.size;
     let truncated = blob.truncated;
-    const pointer = parseLfsPointer(blob.bytes);
+    const pointer = lfsPointerFor(repo, blob.bytes);
     if (pointer) {
       const objectSize = objectStat(pointer.oid)?.size;
       const head = readObjectHead(pointer.oid, LFS_SNIFF_BYTES);
@@ -446,7 +452,7 @@ export function registerRepoRoutes(router: Router): void {
       ? `attachment; filename="${downloadFilename(filePath).replace(/"/g, "")}"`
       : "inline";
 
-    const pointer = parseLfsPointer(blob.bytes);
+    const pointer = lfsPointerFor(repo, blob.bytes);
     const lfsFile = pointer ? objectFile(pointer.oid) : null;
     if (pointer && lfsFile) {
       const head = readObjectHead(pointer.oid, LFS_SNIFF_BYTES) ?? blob.bytes;

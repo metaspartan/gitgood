@@ -74,6 +74,23 @@ export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count.toLocaleString()} ${count === 1 ? one : many}`;
 }
 
+export function followHeadingLink(event: { target: EventTarget | null; preventDefault: () => void }): void {
+  const anchor = (event.target as HTMLElement | null)?.closest?.("a");
+  const href = anchor?.getAttribute("href");
+  if (!href || !href.startsWith("#") || href.length < 2) return;
+  let slug = href.slice(1);
+  try {
+    slug = decodeURIComponent(slug);
+  } catch {
+    return;
+  }
+  const target = document.getElementById(`user-content-${slug}`) ?? document.getElementById(slug);
+  if (!target) return;
+  event.preventDefault();
+  target.scrollIntoView({ block: "start", behavior: "instant" });
+  history.replaceState(history.state, "", `${location.pathname}${location.search}#${encodeURIComponent(slug)}`);
+}
+
 export function Markdown({
   source,
   resolveImageUrl,
@@ -84,7 +101,7 @@ export function Markdown({
   resolveReference?: (raw: string) => string | null;
 }): ReactNode {
   return (
-    <div className="markdown markdown-body">
+    <div className="markdown markdown-body" onClick={followHeadingLink}>
       {renderMarkdown(source, {
         resolveImageUrl,
         resolveReference,

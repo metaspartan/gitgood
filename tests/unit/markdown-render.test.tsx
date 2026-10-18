@@ -7,7 +7,7 @@ const render = (src: string, opts?: { resolveImageUrl?: (s: string) => string | 
 
 test("block structure: headings, lists, quotes, fenced code and horizontal rules render", () => {
   const html = render("# Title\n\n- one\n- two\n\n> a quote\n\n```js\nconst x = 1;\n```\n\n---\n");
-  expect(html).toContain("<h1>"); expect(html).toContain("<ul>"); expect(html).toContain("<li>");
+  expect(html).toMatch(/<h1 id="user-content-title">Title<\/h1>/); expect(html).toContain("<ul>"); expect(html).toContain("<li>");
   expect(html).toContain("<blockquote>"); expect(html).toContain("class=\"markdown-pre\""); expect(html).toContain('class="language-js"');
   expect(html).toContain("<hr/>");
 });
@@ -52,7 +52,7 @@ test("GFM tables, nested tasks, strikethrough and ordered starts", () => {
 test("reference links, balanced parentheses, escapes and multiline quotes follow Markdown grammar", () => {
   const html = render("[docs][d] and [nested](https://example.com/a_(b))\n\n[d]: https://example.com/docs\n\n> First\n>\n> Second\n\nSetext\n======\n\nfoo_bar_baz");
   expect(html).toContain('href="https://example.com/docs"'); expect(html).toContain('href="https://example.com/a_(b)"');
-  expect((html.match(/<blockquote>/g) ?? [])).toHaveLength(1); expect(html).toContain("<h1>Setext</h1>"); expect(html).toContain("foo_bar_baz");
+  expect((html.match(/<blockquote>/g) ?? [])).toHaveLength(1); expect(html).toContain('<h1 id="user-content-setext">Setext</h1>'); expect(html).toContain("foo_bar_baz");
 });
 
 test("raw HTML and dangerous image resolver results cannot execute", () => {

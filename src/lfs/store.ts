@@ -38,6 +38,24 @@ export interface PutResult {
   stored: boolean;
 }
 
+export async function streamMatchesOid(stream: ReadableStream<Uint8Array>, oid: string, maxBytes = config.maxLfsObjectBytes): Promise<boolean> {
+  const hasher = new Bun.CryptoHasher("sha256");
+  const reader = stream.getReader();
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      throw payloadTooLarge(`LFS object exceeds the ${maxBytes} byte limit`);
+    }
+    hasher.update(value);
+  }
+  return hasher.digest("hex") === oid;
+}
+
 export async function putObjectFromStream(
   oid: string,
   stream: ReadableStream<Uint8Array>,

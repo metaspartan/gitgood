@@ -1,6 +1,6 @@
 import { failInterruptedRuns } from "./ci/store.ts";
 import { backfillLfsUsage } from "./lfs/usage.ts";
-import { shellThemeFor, themedShell } from "./web/theme-shell.ts";
+import { personalizedShell, shellSessionJson, shellThemeFor, themedShell } from "./web/theme-shell.ts";
 import { config } from "./config.ts";
 import { changes, migrate } from "./db/index.ts";
 import { startDatabaseMaintenance, stopDatabaseMaintenance } from "./db/maintenance.ts";
@@ -21,7 +21,7 @@ import {
 import { notifiableOwnerIds, notifyOverQuota, notifyPush } from "./data/notify-events.ts";
 import { reindexQuietly } from "./data/code-index.ts";
 import { normalizeRepoName } from "./git/repo.ts";
-import { advertiseRefs, serviceRpc, type GitService } from "./git/smart-http.ts";
+import { advertiseRefs, assertCanWrite, serviceRpc, type GitService } from "./git/smart-http.ts";
 import { handleLfsRequest } from "./lfs/routes.ts";
 import { dispatchWebhooks } from "./data/webhooks.ts";
 import * as gitRepo from "./git/repo.ts";
@@ -107,6 +107,7 @@ async function handleReceivePack(
   auth: Auth,
   request: Request,
 ): Promise<Response> {
+  assertCanWrite(repo, auth);
   const path = repoDiskPath(repo);
   const limit = effectiveQuotaBytes(repo);
 
@@ -319,7 +320,8 @@ async function handleRequest(request: Request, server: Bun.Server<unknown>): Pro
         });
       }
 
-      const shell = themedShell(bundle.indexHtml, shellThemeFor(request));
+      const sessionJson = shellSessionJson(request);
+      const shell = personalizedShell(themedShell(bundle.indexHtml, shellThemeFor(request)), sessionJson);
       const indexGzip = acceptsGzip(request) ? shell.gzip : null;
       if (isNotModified(request, shell.etag)) {
         status = 304;
@@ -333,7 +335,7 @@ async function handleRequest(request: Request, server: Bun.Server<unknown>): Pro
         ...(indexGzip ? { "content-encoding": "gzip" } : {}),
         etag: shell.etag,
         vary: "accept-encoding, cookie",
-        "cache-control": "no-cache",
+        "cache-control": sessionJson ? "no-cache, private" : "no-cache",
       });
     }
 

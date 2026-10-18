@@ -28,6 +28,10 @@ export const THEMES = [
 ] as const;
 export type ThemeId = typeof THEMES[number]["id"];
 export function themeById(id: unknown) { return THEMES.find(theme => theme.id === id); }
+const PRIMARY: Partial<Record<ThemeId, [string, string]>> = {
+  "github-dimmed": ["#347d39", "#2e6f32"],
+};
+
 export function themeVariables(id: ThemeId): Record<string, string> {
   const theme = themeById(id)!;
   const keys = ["bg", "bg-elevated", "bg-inset", "border", "border-strong", "text", "text-dim", "text-faint", "accent"];
@@ -35,9 +39,23 @@ export function themeVariables(id: ThemeId): Record<string, string> {
   const light = theme.mode === "light";
   return { ...vars,
     "--link": theme.colors[8],
-    "--link-hover": `color-mix(in srgb, ${theme.colors[8]} 78%, ${theme.colors[5]})`,
+    "--link-hover": theme.colors[8],
     "--accent-hover": `color-mix(in srgb, ${theme.colors[8]} 90%, ${light ? "#000000" : "#ffffff"})`,
-    "--hover-bg": `color-mix(in srgb, ${theme.colors[8]} 9%, ${theme.colors[1]})`,
+    "--hover-bg": `color-mix(in srgb, ${theme.colors[6]} ${light ? 10 : 12}%, transparent)`,
+    "--active-bg": `color-mix(in srgb, ${theme.colors[6]} ${light ? 15 : 18}%, transparent)`,
+    "--counter-bg": `color-mix(in srgb, ${theme.colors[6]} ${light ? 14 : 20}%, transparent)`,
+    "--underline-nav": light ? "#fd8c73" : "#f78166",
+    "--btn-bg": `color-mix(in srgb, ${theme.colors[5]} ${light ? 3.5 : 7}%, ${theme.colors[1]})`,
+    "--btn-hover-bg": `color-mix(in srgb, ${theme.colors[5]} ${light ? 6.5 : 11}%, ${theme.colors[1]})`,
+    "--btn-active-bg": `color-mix(in srgb, ${theme.colors[5]} ${light ? 9 : 14}%, ${theme.colors[1]})`,
+    "--btn-border": light ? theme.colors[3] : `color-mix(in srgb, ${theme.colors[5]} 13%, ${theme.colors[1]})`,
+    "--btn-shadow": light ? "0 1px 0 #1f23280a" : "0 0 transparent",
+    "--btn-primary-bg": PRIMARY[theme.id]?.[0] ?? "#1f883d",
+    "--btn-primary-hover-bg": PRIMARY[theme.id]?.[1] ?? "#1a7f37",
+    "--btn-primary-border": light ? "#1f23281a" : "#f0f6fc1a",
+    "--btn-primary-text": "#ffffff",
+    "--btn-danger-hover-bg": light ? "#cf222e" : "#da3633",
+    "--btn-danger-hover-text": "#ffffff",
     "--focus-ring": theme.colors[8],
     "--checker-tile": theme.colors[3],
     "--selection-bg": `color-mix(in srgb, ${theme.colors[8]} 24%, ${theme.colors[1]})`,

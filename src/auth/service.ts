@@ -10,6 +10,8 @@ import {
 import { config } from "../config.ts";
 import { readCookie, parseAuthHeader, type AuthHeader } from "../lib/http.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
+import { checkLoginThrottle, recordLoginFailure, recordLoginSuccess } from "./login-throttle.ts";
+import { getTotpState } from "./account-store.ts";
 
 export const SESSION_COOKIE = "gitgood_session";
 
@@ -284,8 +286,15 @@ export async function resolveAuth(request: Request, headerOverride?: AuthHeader)
     const byPasswordToken = principalForToken(header.password);
     if (byPasswordToken) return byPasswordToken;
 
+    if (checkLoginThrottle(header.username).blocked) return ANONYMOUS;
     const user = findUserByUsername(header.username);
-    if (user && !user.blocked_at && (await verifyPassword(header.password, user.password_hash))) {
+    const valid = user ? await verifyPassword(header.password, user.password_hash) : await verifyPassword(header.password, DUMMY_HASH);
+    if (!user || !valid) {
+      recordLoginFailure(header.username);
+      return ANONYMOUS;
+    }
+    recordLoginSuccess(header.username);
+    if (!user.blocked_at && !hasConfirmedTotp(user.id)) {
       return {
         kind: "user",
         userId: user.id,
@@ -321,6 +330,11 @@ export function requireWrite(auth: Auth): Principal {
     throw forbidden("This token does not have write scope");
   }
   return principal;
+}
+
+function hasConfirmedTotp(userId: number): boolean {
+  const totp = getTotpState(userId);
+  return totp.secret !== null && totp.confirmed_at !== null;
 }
 
 export function requireInstanceAdmin(auth: Auth, mutating: boolean): Principal {

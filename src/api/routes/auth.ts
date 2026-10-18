@@ -104,12 +104,11 @@ export function registerAuthRoutes(router: Router): void {
       recordLoginFailure(body.username);
       throw invalidCredentials();
     }
-    recordLoginSuccess(body.username);
-
     const totp = getTotpState(user.id);
     if (totp.secret !== null && totp.confirmed_at !== null) {
       return json({ mfa_required: true, methods: ["totp", "recovery_code"] });
     }
+    recordLoginSuccess(body.username);
 
     const sessionId = issueSession(user.id);
     pruneExpiredSessions();
@@ -129,7 +128,6 @@ export function registerAuthRoutes(router: Router): void {
       recordLoginFailure(body.username);
       throw invalidCredentials();
     }
-    recordLoginSuccess(body.username);
 
     const totp = getTotpState(user.id);
     if (totp.secret === null || totp.confirmed_at === null) {

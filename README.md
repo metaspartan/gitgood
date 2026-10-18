@@ -21,7 +21,7 @@ GitGood is built for people who want GitHub's workflow on their own hardware wit
 | Image diffs (2-up / onion skin), including LFS images | ✅ | ✅ | ✅ | ✅ |
 | Admin area (users, block, roles, runners, instance settings, backups) | ✅ | Enterprise | ✅ | ✅ |
 | Themes | 26, per-user "sync with system" | ✅ | ✅ | ✅ |
-| Production dependencies | 5 npm packages, 0 known vulnerabilities (OSV) | n/a | hundreds | Go modules |
+| Production dependencies | 3 npm packages (react, react-dom, three), 0 known vulnerabilities (OSV) | n/a | hundreds | Go modules |
 
 ¹ [GitLab installation requirements](https://docs.gitlab.com/install/requirements/) · ² [Gitea documentation](https://docs.gitea.com/)
 
@@ -105,7 +105,7 @@ Each job runs in a fresh container (memory, CPU and PID limits, `no-new-privileg
 - **Organizations** with owner/admin/member roles and per-repository collaborators.
 - **Git LFS** (batch API, locks) with deduplicated storage and per-repository usage.
 - **Webhooks** with SSRF protection, delivery history and retries.
-- **Security**: Argon2id passwords, TOTP and passkeys, scoped and repository-pinned tokens, per-account and per-IP login throttling, strict CSP, CSRF protection, masked 404s for private resources, blocked-user enforcement across web, API, Git and SSH.
+- **Security**: Argon2id passwords, TOTP and passkeys (password-only Git/API access is refused once two-factor is on), scoped and repository-pinned tokens, per-account and per-IP login throttling, strict CSP, CSRF protection, masked 404s for private resources, blocked-user enforcement across web, API, Git and SSH.
 - **Operations**: online backup/restore to local, NAS or cloud destinations, storage quotas, readiness/health endpoints, Prometheus-style metrics, structured logs.
 
 ## Configuration

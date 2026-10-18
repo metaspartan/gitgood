@@ -12,7 +12,7 @@
 .markdown-body pre { margin: 1em 0; padding: 1em; overflow-x: auto; background: var(--bg-inset); border: 1px solid var(--border); border-radius: 8px; }
 .markdown-body pre code { display: block; padding: 0; background: transparent; border: 0; border-radius: 0; font-size: 0.9em; line-height: 1.6; white-space: pre; }
 .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
-.markdown-body table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.markdown-body table { border-collapse: collapse; margin: 1em 0; }
 .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 0.5em 0.8em; text-align: left; }
 .markdown-body img { max-width: 100%; border-radius: 6px; }
 
@@ -20,10 +20,13 @@
 .markdown-body > :last-child { margin-bottom: 0; }
 .markdown-body h1, .markdown-body h2 { padding-bottom: .35em; border-bottom: 1px solid var(--border); }
 .markdown-body .markdown-table-scroll { overflow-x: auto; max-width: 100%; margin: 1em 0; }
-.markdown-table-scroll table { width: max-content; min-width: 100%; margin: 0; }
+.markdown-table-scroll table { width: auto; max-width: 100%; margin: 0; }
+.markdown-body tbody tr:nth-child(2n) { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.markdown-body td code, .markdown-body th code { white-space: nowrap; }
 .markdown-body th { background: var(--bg-inset); font-weight: 600; }
 .markdown-body tr:nth-child(even) { background: var(--bg-inset); }
 .markdown-body .contains-task-list { list-style: none; padding-left: 1.4em; }
 .markdown-body .task-list-item input { width: auto; margin: 0 .5em 0 -1.4em; }
 .markdown-body li > p { margin: .45em 0; }
 .markdown-body pre code { border: 0; padding: 0; }
+.markdown-body :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 80px; }

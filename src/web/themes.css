@@ -13,7 +13,6 @@
 .theme-preview { padding: 20px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--bg-elevated); color: var(--text); }
 .theme-preview p { color: var(--text-dim); }
 .theme-preview-accent { display: inline-block; margin-left: 16px; color: var(--accent); }
-html[data-theme] button.primary, html[data-theme] .home-create-action { background: var(--accent); color: var(--button-text); }
 html[data-theme-mode="light"] { --shadow-sm: 0 1px 3px #1f293712; --shadow-md: 0 4px 16px #1f293718; --shadow-lg: 0 16px 48px #1f293724; }
 html[data-theme-mode="light"] .ci-log { background: var(--bg-inset); color: var(--text); }
 html[data-theme-mode="light"] .image-checker { background-color: var(--bg-inset); }
@@ -21,20 +20,13 @@ html[data-theme-mode="light"] .image-checker { background-color: var(--bg-inset)
 @media (max-width:620px) { .theme-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .backup-page .deployment-guidance { margin-top: 32px; padding-top: 24px; } }
 
 html[data-theme] .header-brand, html[data-theme] .header-brand span { color: var(--text); -webkit-text-fill-color: var(--text); }
-html[data-theme] button:disabled { opacity: 1; background: var(--bg-inset); color: var(--text-faint); border-color: var(--border); box-shadow: none; }
-html[data-theme] button.primary:disabled { background: var(--bg-inset); color: var(--text-dim); border-color: var(--border-strong); }
 
 html[data-theme] a { color: var(--link); }
 html[data-theme] a:hover { color: var(--link-hover); }
+html[data-theme] a.btn-primary, html[data-theme] a.btn-primary:hover { color: var(--btn-primary-text); }
 html[data-theme] a.header-brand, html[data-theme] a.repo-name { color: var(--text); }
 html[data-theme] a.header-nav-link { color: var(--text-dim); }
 html[data-theme] a.header-nav-link:hover, html[data-theme] a.header-nav-link[aria-current="page"] { background: var(--hover-bg); color: var(--link); }
-html[data-theme] button:hover:not(:disabled), html[data-theme] .button-link:hover { background: var(--hover-bg); border-color: var(--border-strong); }
-html[data-theme] button.primary:hover:not(:disabled), html[data-theme] a.home-create-action:hover { background: var(--accent-hover); color: var(--button-text); border-color: var(--accent-hover); }
-html[data-theme] button.primary:active:not(:disabled) { background: var(--accent-hover); }
-html[data-theme] button.danger { color: var(--danger); }
-html[data-theme] button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 12%, var(--bg-elevated)); border-color: var(--danger); }
-html[data-theme] a.home-create-action { color: var(--button-text); }
 html[data-theme] .header-notifications .header-count { color: var(--button-text); }
 html[data-theme] .header-account-panel a { color: var(--text); }
 html[data-theme] .header-account-panel a:hover { background: var(--hover-bg); color: var(--link); }
@@ -57,7 +49,6 @@ html[data-theme] a.header-signin:hover { color: var(--link); background: var(--h
 html[data-theme] a.muted-link, html[data-theme] .code-toolbar-counts a { color: var(--text-dim); }
 html[data-theme] a.muted-link:hover, html[data-theme] .code-toolbar-counts a:hover { color: var(--link); }
 html[data-theme] a.btn-secondary, html[data-theme] a.btn-secondary:hover { color: var(--text); }
-html[data-theme] a.btn-primary, html[data-theme] a.btn-primary:hover { color: #fff; }
 html[data-theme] .repo-tabs a, html[data-theme] .repo-tabs a:hover { color: var(--text); }
 html[data-theme] .clone-panel-actions a, html[data-theme] .clone-panel-actions a:hover { color: var(--text); }
 html[data-theme] .code-filelist .entry a.name { color: var(--text); }
