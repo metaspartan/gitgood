@@ -64,4 +64,4 @@ export class RateLimiter {
 
 export const apiRateLimiter = new RateLimiter();
 
-export const authRateLimiter = new RateLimiter(30, config.rateLimitWindowMs);
+export const authRateLimiter = new RateLimiter(config.authRateLimitMax, config.rateLimitWindowMs);

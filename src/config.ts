@@ -38,6 +38,7 @@ export const config = {
 
   rateLimitWindowMs: envInt("GITGOOD_RATE_WINDOW_MS", 60_000),
   rateLimitMax: envInt("GITGOOD_RATE_MAX", 600),
+  authRateLimitMax: envInt("GITGOOD_AUTH_RATE_MAX", 30),
 
   allowSignup: envBool("GITGOOD_ALLOW_SIGNUP", true),
 

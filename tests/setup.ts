@@ -12,5 +12,6 @@ process.env.GITGOOD_LFS_ROOT = join(root, "lfs");
 process.env.GITGOOD_BASE_URL = "http://127.0.0.1:0";
 process.env.GITGOOD_LOG_LEVEL = "error";
 process.env.GITGOOD_RATE_MAX = "100000";
+process.env.GITGOOD_AUTH_RATE_MAX = "100000";
 
 process.env.GITGOOD_WEB_DIST = join(root, "no-prebuilt-web-dist");
