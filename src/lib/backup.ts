@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { config } from "../config.ts";
+import { isDatabaseOpenHere } from "./open-databases.ts";
 
 export const BACKUP_FORMAT = 1;
 
@@ -213,6 +214,12 @@ export function runRestore(options: RestoreOptions): RestoreResult {
     }
 
     if (kind === "file") {
+      if (isDatabaseOpenHere(target)) {
+        throw new Error(
+          `Restoring the database failed because this process has it open. Stop the GitGood server and ` +
+            `run the restore again; the previous state is preserved at ${previousState ?? "(not moved)"}.`,
+        );
+      }
       try {
         copyFileSync(source, target);
       } catch (cause) {

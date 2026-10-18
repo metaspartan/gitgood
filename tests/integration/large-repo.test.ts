@@ -336,7 +336,8 @@ describe("large repository: blame and archives", () => {
 
     const file = join(scratch, "large.zip");
     await Bun.write(file, bytes);
-    const proc = Bun.spawn(["tar", "-tf", file], { stdout: "pipe", stderr: "pipe" });
+    const lister = process.platform === "win32" ? ["tar", "-tf", file] : ["unzip", "-Z1", file];
+    const proc = Bun.spawn(lister, { stdout: "pipe", stderr: "pipe" });
     const [listing] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
 
     const entries = listing

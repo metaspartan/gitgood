@@ -12,8 +12,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: git lfs install
+      - run: sudo apt-get install -y git-lfs unzip && git lfs install
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run build:web
+      - run: bun tests/fixtures/make-large-repo.ts
       - run: bun run test

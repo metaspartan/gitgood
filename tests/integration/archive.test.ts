@@ -64,9 +64,11 @@ async function extract(bytes: Uint8Array, label: string): Promise<string[]> {
   mkdirSync(dir, { recursive: true });
   const archive = join(scratch, `${label}.bin`);
   writeFileSync(archive, bytes);
-  const proc = Bun.spawn(["tar", "-xf", archive, "-C", dir], { stdout: "pipe", stderr: "pipe" });
+  const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  const command = isZip && process.platform !== "win32" ? ["unzip", "-q", "-o", archive, "-d", dir] : ["tar", "-xf", archive, "-C", dir];
+  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
   const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
-  if (code !== 0) throw new Error(`tar failed: ${stderr}`);
+  if (code !== 0) throw new Error(`${command[0]} failed: ${stderr}`);
 
   const listing: string[] = [];
   const walk = (directory: string, prefix: string): void => {

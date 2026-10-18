@@ -437,8 +437,18 @@ describe("git lfs", () => {
   });
 
   test("deduplicates identical objects", async () => {
-    const stats = await user.request<{ lfs: { objects: number } }>("/api/stats");
-    expect(stats.data.lfs.objects).toBe(1);
+    const count = async () => (await user.request<{ lfs: { objects: number } }>("/api/stats")).data.lfs.objects;
+    const before = await count();
+    const batch = await user.request<{ objects: Array<{ actions?: { upload?: { href: string } } }> }>(
+      `/${username}/git.git/info/lfs/objects/batch`,
+      { method: "POST", body: { operation: "upload", transfers: ["basic"], objects: [{ oid, size: content.length }] } },
+    );
+    const href = batch.data.objects[0]?.actions?.upload?.href;
+    if (href) {
+      const upload = await fetch(href, { method: "PUT", headers: { authorization: `Bearer ${token}` }, body: content });
+      expect(upload.status).toBe(200);
+    }
+    expect(await count()).toBe(before);
   });
 
   test("rejects content whose hash does not match the oid", async () => {

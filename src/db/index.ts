@@ -2,6 +2,7 @@ import { Database, type SQLQueryBindings, type Statement } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { config } from "../config.ts";
+import { markDatabaseOpen } from "../lib/open-databases.ts";
 
 mkdirSync(config.dataDir, { recursive: true });
 mkdirSync(config.repoRoot, { recursive: true });
@@ -9,6 +10,7 @@ mkdirSync(config.lfsRoot, { recursive: true });
 mkdirSync(dirname(config.dbPath), { recursive: true });
 
 export const db = new Database(config.dbPath, { create: true, strict: true });
+markDatabaseOpen(config.dbPath);
 
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA synchronous = NORMAL;");
