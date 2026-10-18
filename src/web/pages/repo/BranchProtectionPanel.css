@@ -1,0 +1,13 @@
+.branch-protection { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 24px; }
+.branch-protection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.branch-protection-heading h3 { margin: 0 0 8px; }
+.branch-protection-heading p { margin: 0; }
+.branch-protection-list { padding: 0; margin: 20px 0; list-style: none; border: 1px solid var(--border); border-radius: 10px; }
+.branch-protection-list li { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--border); }
+.branch-protection-list li:last-child { border-bottom: 0; }
+.branch-protection-list code { overflow-wrap: anywhere; }
+.branch-protection-list p { margin: 6px 0 0; }
+.branch-protection-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.branch-protection-form input { max-width: 300px; min-width: 0; }
+.branch-protection-confirm { margin-top: 16px; padding: 16px; background: var(--bg-inset); border: 1px solid var(--border-strong); border-radius: 10px; }
+@media (max-width: 620px) { .branch-protection-heading { flex-direction: column; gap: 12px; } .branch-protection-list li { align-items: flex-start; flex-direction: column; } .branch-protection-form { align-items: stretch; flex-direction: column; } .branch-protection-form input { max-width: none; } .branch-protection button { min-height: 44px; } }

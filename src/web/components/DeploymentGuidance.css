@@ -1,0 +1,6 @@
+.deployment-guidance { margin: 32px 0 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.deployment-guidance > h2 { margin: 0 0 16px; font-size: 18px; }
+.deployment-guidance .admin-readiness { margin: 0; grid-template-columns: repeat(auto-fit,minmax(min(240px,100%),1fr)); }
+.deployment-guidance .admin-readiness > div { min-width: 0; }
+.deployment-guidance p { line-height: 1.65; }
+@media (max-width: 620px) { .deployment-guidance { margin-top: 28px; padding-top: 20px; } }

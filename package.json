@@ -1,0 +1,42 @@
+{
+  "name": "gitgood",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitGood - a blazing fast, low-memory Git hosting platform (GitHub/GitLab alternative)",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts",
+    "build:web": "bun tools/build-web.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --timeout 120000",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "bench": "bun bench/bench.ts",
+    "e2e": "bun tools/e2e.ts",
+    "seed": "bun tools/seed.ts",
+    "check:bytes": "bun tools/check-bytes.ts",
+    "check:lfs": "bun tools/check-lfs.ts",
+    "check:images": "bun tools/check-images.ts",
+    "check:ci": "bun tools/check-ci.ts",
+    "check:auth": "bun tools/check-auth-lfs.ts",
+    "check:bootstrap": "bun tools/check-bootstrap.ts"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "0.186.0",
+    "typescript": "^7.0.2"
+  }
+}

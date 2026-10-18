@@ -1,0 +1,73 @@
+services:
+  gitgood:
+    build: .
+    image: gitgood:local
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 4
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    environment:
+      NODE_ENV: production
+      GITGOOD_HOST: 0.0.0.0
+      GITGOOD_PORT: 3000
+      GITGOOD_BASE_URL: https://${GITGOOD_PUBLIC_HOST:?Set GITGOOD_PUBLIC_HOST}:8443
+      GITGOOD_ALLOW_SIGNUP: "false"
+      GITGOOD_ALLOW_REPO_CREATION: "true"
+      GITGOOD_TRUST_PROXY: "true"
+      GITGOOD_CI_MODE: ${GITGOOD_CI_MODE:-runner}
+      GITGOOD_GIT_CONCURRENCY: "8"
+      GITGOOD_ADMIN_PASSWORD: ${GITGOOD_ADMIN_PASSWORD:?Set a unique bootstrap password}
+      GITGOOD_BACKUP_DESTINATIONS: '[{"id":"local","name":"Local recovery copies","kind":"local","target":"/backups"}]'
+      GITGOOD_BACKUP_STAGING: /backups/staging
+    volumes:
+      - gitgood-data:/data
+      - gitgood-backups:/backups
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/api/ready"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 45s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  https:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      GITGOOD_PUBLIC_HOST: ${GITGOOD_PUBLIC_HOST:?Set GITGOOD_PUBLIC_HOST}
+    ports:
+      - "${GITGOOD_PUBLIC_HOST}:8443:8443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - gitgood-tls:/data
+      - gitgood-tls-config:/config
+    depends_on:
+      gitgood:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  gitgood-data:
+  gitgood-backups:
+  gitgood-tls:
+  gitgood-tls-config:

@@ -1,0 +1,56 @@
+services:
+  gitgood:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gitgood:1.0.0
+    restart: unless-stopped
+    ports:
+      - "${GITGOOD_PORT:-3000}:3000"
+    environment:
+      GITGOOD_BASE_URL: "${GITGOOD_BASE_URL:-http://localhost:3000}"
+      GITGOOD_ALLOW_SIGNUP: "${GITGOOD_ALLOW_SIGNUP:-true}"
+      GITGOOD_GIT_CONCURRENCY: "${GITGOOD_GIT_CONCURRENCY:-16}"
+      GITGOOD_LOG_LEVEL: "${GITGOOD_LOG_LEVEL:-info}"
+      GITGOOD_WEB_DIST: "/app/dist/web"
+      GITGOOD_TRUST_PROXY: "${GITGOOD_TRUST_PROXY:-false}"
+      GITGOOD_CI_MODE: "${GITGOOD_CI_MODE:-runner}"
+
+    volumes:
+      - gitgood-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:3000/api/ready"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    stop_grace_period: 20s
+
+  runner:
+    profiles: ["runner"]
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    image: gitgood-runner:1.0.0
+    restart: unless-stopped
+    depends_on:
+      - gitgood
+    environment:
+      GITGOOD_RUNNER_URL: "${GITGOOD_RUNNER_URL:-http://gitgood:3000}"
+      GITGOOD_RUNNER_TOKEN: "${GITGOOD_RUNNER_TOKEN:?Register a runner in Admin > Runners and set GITGOOD_RUNNER_TOKEN}"
+      GITGOOD_RUNNER_NETWORK: "${GITGOOD_RUNNER_NETWORK:-bridge}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/gitgood-runner:/tmp/gitgood-runner
+
+volumes:
+  gitgood-data:
+    driver: local

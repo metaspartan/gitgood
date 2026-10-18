@@ -1,0 +1,11 @@
+[install]
+exact = true
+
+[test]
+root = "tests"
+preload = ["./tests/setup.ts"]
+# NOTE: a per-test budget cannot be set here. Bun 1.4 accepts a `timeout` key
+# in [test] and then ignores it - verified by setting it to 1 ms and watching a
+# 300 ms test pass. Use the CLI flag instead (`bun test --timeout 120000`), or
+# pass an explicit budget as a test's third argument. `bun run test` sets the
+# flag for the whole suite.

@@ -1,0 +1,72 @@
+.theme-options { border: 0; padding: 0; margin: 24px 0; min-width: 0; }
+.theme-options legend { font-weight: 600; margin-bottom: 12px; }
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; }
+.theme-option { position: relative; display: block; min-width: 0; padding: 12px; border: 2px solid var(--border-strong); border-radius: 12px; background: var(--bg); color: var(--text); cursor: pointer; }
+.theme-option:has(input:checked) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.theme-option:has(input:focus-visible) { outline: 3px solid var(--text); outline-offset: 3px; }
+.theme-option input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.theme-mini { display: grid; gap: 7px; height: 74px; padding: 10px; margin-bottom: 10px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 7px; }
+.theme-mini span { width: 40%; height: 6px; background: var(--accent); border-radius: 4px; }
+.theme-mini i { display: block; width: 85%; height: 4px; background: var(--text-dim); border-radius: 4px; }
+.theme-mini i:last-child { width: 60%; }
+.theme-name { font-size: 13px; font-weight: 600; }
+.theme-preview { padding: 20px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--bg-elevated); color: var(--text); }
+.theme-preview p { color: var(--text-dim); }
+.theme-preview-accent { display: inline-block; margin-left: 16px; color: var(--accent); }
+html[data-theme] button.primary, html[data-theme] .home-create-action { background: var(--accent); color: var(--button-text); }
+html[data-theme-mode="light"] { --shadow-sm: 0 1px 3px #1f293712; --shadow-md: 0 4px 16px #1f293718; --shadow-lg: 0 16px 48px #1f293724; }
+html[data-theme-mode="light"] .ci-log { background: var(--bg-inset); color: var(--text); }
+html[data-theme-mode="light"] .image-checker { background-color: var(--bg-inset); }
+.backup-page .deployment-guidance { margin-top: 40px; padding-top: 28px; }
+@media (max-width:620px) { .theme-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .backup-page .deployment-guidance { margin-top: 32px; padding-top: 24px; } }
+
+html[data-theme] .header-brand, html[data-theme] .header-brand span { color: var(--text); -webkit-text-fill-color: var(--text); }
+html[data-theme] button:disabled { opacity: 1; background: var(--bg-inset); color: var(--text-faint); border-color: var(--border); box-shadow: none; }
+html[data-theme] button.primary:disabled { background: var(--bg-inset); color: var(--text-dim); border-color: var(--border-strong); }
+
+html[data-theme] a { color: var(--link); }
+html[data-theme] a:hover { color: var(--link-hover); }
+html[data-theme] a.header-brand, html[data-theme] a.repo-name { color: var(--text); }
+html[data-theme] a.header-nav-link { color: var(--text-dim); }
+html[data-theme] a.header-nav-link:hover, html[data-theme] a.header-nav-link[aria-current="page"] { background: var(--hover-bg); color: var(--link); }
+html[data-theme] button:hover:not(:disabled), html[data-theme] .button-link:hover { background: var(--hover-bg); border-color: var(--border-strong); }
+html[data-theme] button.primary:hover:not(:disabled), html[data-theme] a.home-create-action:hover { background: var(--accent-hover); color: var(--button-text); border-color: var(--accent-hover); }
+html[data-theme] button.primary:active:not(:disabled) { background: var(--accent-hover); }
+html[data-theme] button.danger { color: var(--danger); }
+html[data-theme] button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 12%, var(--bg-elevated)); border-color: var(--danger); }
+html[data-theme] a.home-create-action { color: var(--button-text); }
+html[data-theme] .header-notifications .header-count { color: var(--button-text); }
+html[data-theme] .header-account-panel a { color: var(--text); }
+html[data-theme] .header-account-panel a:hover { background: var(--hover-bg); color: var(--link); }
+html[data-theme] :focus-visible { outline-color: var(--focus-ring); }
+html[data-theme] ::selection { background: var(--selection-bg); color: var(--text); }
+html[data-theme] .tok-comment { color: var(--syntax-comment); }
+html[data-theme] .tok-string { color: var(--syntax-string); }
+html[data-theme] .tok-number, html[data-theme] .tok-literal { color: var(--syntax-number); }
+html[data-theme] .tok-keyword { color: var(--syntax-keyword); }
+html[data-theme] .tok-type, html[data-theme] .tok-key { color: var(--syntax-type); }
+html[data-theme] .tok-function { color: var(--syntax-function); }
+html[data-theme] .tok-tag { color: var(--syntax-tag); }
+html[data-theme] .tok-attr { color: var(--syntax-attr); }
+
+html[data-theme] a.skip-link, html[data-theme] a.skip-link:hover, html[data-theme] .nav-badge.has-count .pill-count { color: var(--button-text); }
+html[data-theme] a.code-ln { color: var(--text-faint); }
+html[data-theme] a.code-ln:hover, html[data-theme] .code-line.is-selected a.code-ln { color: var(--link); }
+html[data-theme] a.header-signin { color: var(--text); }
+html[data-theme] a.header-signin:hover { color: var(--link); background: var(--hover-bg); }
+html[data-theme] a.muted-link, html[data-theme] .code-toolbar-counts a { color: var(--text-dim); }
+html[data-theme] a.muted-link:hover, html[data-theme] .code-toolbar-counts a:hover { color: var(--link); }
+html[data-theme] a.btn-secondary, html[data-theme] a.btn-secondary:hover { color: var(--text); }
+html[data-theme] a.btn-primary, html[data-theme] a.btn-primary:hover { color: #fff; }
+html[data-theme] .repo-tabs a, html[data-theme] .repo-tabs a:hover { color: var(--text); }
+html[data-theme] .clone-panel-actions a, html[data-theme] .clone-panel-actions a:hover { color: var(--text); }
+html[data-theme] .code-filelist .entry a.name { color: var(--text); }
+html[data-theme] .code-filelist .entry a.name:hover { color: var(--link); }
+html[data-theme] a.latest-commit-message { color: var(--text-dim); }
+html[data-theme] a.latest-commit-message:hover { color: var(--link); }
+html[data-theme] .breadcrumbs a { color: var(--link); }
+html[data-theme] a.repo-action, html[data-theme] a.repo-action:hover { color: var(--text); }
+html[data-theme] a.repo-action-counter:hover { color: var(--link); }
+html[data-theme] a.action-menu-footer { color: var(--link); }
+html[data-theme] .people-tabs a { color: var(--text-dim); }
+html[data-theme] .people-tabs a.active, html[data-theme] .people-tabs a:hover { color: var(--text); }

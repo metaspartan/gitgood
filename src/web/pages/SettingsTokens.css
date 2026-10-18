@@ -1,0 +1,11 @@
+.token-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: end; }
+.token-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.token-field label { font-size: 12px; color: var(--text-dim); }
+.token-form button { min-height: 40px; }
+.token-hint { margin: 10px 0 0; line-height: 1.6; }
+.token-repo-cell { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+.table-scroll { overflow-x: auto; }
+@media (max-width: 760px) {
+  .token-form { grid-template-columns: minmax(0, 1fr); }
+  .token-form button { width: 100%; min-height: 44px; }
+}

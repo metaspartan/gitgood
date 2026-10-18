@@ -1,0 +1,15 @@
+node_modules/
+/data/
+/dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+bench/results/*
+!bench/results/latest.json
+tests/fixtures/express-ish/
+/tests/integration/data/
+.commit-msg
+*.commit-msg

@@ -1,0 +1,10 @@
+{
+  admin off
+  auto_https disable_redirects
+  default_sni {$GITGOOD_PUBLIC_HOST}
+}
+https://{$GITGOOD_PUBLIC_HOST}:8443 {
+  tls internal
+  encode zstd gzip
+  reverse_proxy gitgood:3000
+}

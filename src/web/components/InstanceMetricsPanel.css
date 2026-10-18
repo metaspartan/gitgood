@@ -1,0 +1,9 @@
+
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 18px; margin-top: 18px; }
+.metrics-group { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-inset); min-width: 0; }
+.metrics-group h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
+.metrics-group dl { margin: 0; }
+.metrics-group dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); }
+.metrics-group dl > div:first-child { border-top: 0; }
+.metrics-group dt { font-size: 13px; color: var(--text-dim); min-width: 0; }
+.metrics-group dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
