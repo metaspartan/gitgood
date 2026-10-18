@@ -40,7 +40,7 @@ export function listStargazers(repoId: number, limit = 100): StargazerHit[] {
     `SELECT u.username, u.display_name, u.avatar_hue, s.created_at AS starred_at
        FROM stars s JOIN users u ON u.id = s.user_id
       WHERE s.repo_id = ?
-      ORDER BY s.created_at DESC
+      ORDER BY s.created_at DESC, s.rowid DESC
       LIMIT ?`,
     repoId,
     limit,
@@ -52,7 +52,7 @@ export function listStarredByUser(userId: number, limit = 100): RepoWithCounts[]
     `${repoCountsProjection()}
        JOIN stars st ON st.repo_id = r.id
       WHERE st.user_id = ?
-      ORDER BY st.created_at DESC
+      ORDER BY st.created_at DESC, st.rowid DESC
       LIMIT ?`,
     userId,
     limit,
@@ -114,7 +114,7 @@ export function listWatchers(repoId: number, limit = 100): StargazerHit[] {
     `SELECT u.username, u.display_name, u.avatar_hue, w.created_at AS starred_at
        FROM watches w JOIN users u ON u.id = w.user_id
       WHERE w.repo_id = ? AND w.level = 'all'
-      ORDER BY w.created_at DESC
+      ORDER BY w.created_at DESC, w.rowid DESC
       LIMIT ?`,
     repoId,
     limit,

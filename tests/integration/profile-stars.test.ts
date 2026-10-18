@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createServer } from "../../src/server.ts";
+import { changes } from "../../src/db/index.ts";
+import { findUserByUsername } from "../../src/auth/service.ts";
 
 const server = createServer(0);
 const BASE = `http://127.0.0.1:${server.port}`;
@@ -52,6 +54,12 @@ describe("profile stars and counts", () => {
       const profile = await viewer.call<{ repo_count: number; star_count: number }>(`/api/users/${alice}`);
       expect(profile.data).toMatchObject({ repo_count: 1, star_count: 1 });
     }
+  });
+
+  test("stars made in the same millisecond still list newest first", async () => {
+    changes("UPDATE stars SET created_at = 1 WHERE user_id = ?", findUserByUsername(alice)!.id);
+    const starred = await a.call<{ items: { full_name: string }[] }>(`/api/users/${alice}/starred`);
+    expect(starred.data.items.map((r) => r.full_name)).toEqual([`${alice}/hidden`, `${alice}/open`]);
   });
 
   test("an unknown user is a 404", async () => {
