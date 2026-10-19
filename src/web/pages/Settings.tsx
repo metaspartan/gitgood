@@ -4,7 +4,7 @@ import { api } from "../api.ts";
 import { ErrorBanner, Notice, Spinner, timeAgo, useAsync } from "../components.tsx";
 import { useSession } from "../App.tsx";
 import { Link, useLocation } from "../router.tsx";
-import { CommitEmailsPanel, SettingsNav, SshKeysPanel, settingsSectionFrom } from "../components/SettingsShell.tsx";
+import { CommitEmailsPanel, SettingsNav, SshKeysPanel, settingsSectionFrom, UserRunnersPanel } from "../components/SettingsShell.tsx";
 import type { PasskeyChallenge } from "../types.ts";
 import { PersonalAppearance } from "../components/PersonalAppearance.tsx";
 import { SessionsPanel } from "../components/SessionsPanel.tsx";
@@ -645,6 +645,7 @@ export function SettingsPage(): ReactNode {
         </>
       ) : null}
       {section === "keys" ? <SshKeysPanel /> : null}
+      {section === "runners" ? <UserRunnersPanel /> : null}
       </div>
     </div>
   );

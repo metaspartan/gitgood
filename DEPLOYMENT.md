@@ -557,38 +557,49 @@ the pre-upgrade backup is step one.
 
 ## Backup administration page
 
-Instance administrators can open **Account menu → Backup administration** at
-`/admin/backups`. Configure trusted destinations on the server; the browser only
-submits destination IDs, never filesystem paths or cloud credentials.
+Instance administrators manage backups at **Admin area → Backups** (`/admin/backups`):
 
-Example environment value (JSON on one line):
+- **Destinations**: add, edit, test and remove local folders, mounted NAS shares
+  and rclone Google Drive remotes. **Test** checks that the destination is
+  writable, reports free space, and for Drive confirms the rclone remote answers.
+- **Schedules**: manual, daily or weekly at a chosen hour (UTC). The server checks
+  once a minute and runs at most one backup at a time; a run missed while the
+  server was down starts once when it comes back.
+- **Retention**: keep the latest *N* backups per destination (0 keeps all). After a
+  successful run, older copies GitGood made in that destination are deleted, locally
+  and on the remote. Failed runs never delete anything.
+- **History**: every run is stored in the database with trigger, status, size,
+  duration and location, and survives restarts. Runs interrupted by a restart are
+  marked failed. Errors shown in the browser never include filesystem paths.
+
+Destinations can also be defined on the server with `GITGOOD_BACKUP_DESTINATIONS`
+(JSON on one line). These appear in the admin area marked *Server environment*:
+their location is not shown in the browser and only their schedule and retention
+can be changed there.
 
 ```json
 [{"id":"local","name":"Recovery disk","kind":"local","target":"/backups/gitgood"},{"id":"nas","name":"Office NAS","kind":"nas","target":"/mnt/nas/gitgood"},{"id":"drive","name":"Off-site archive","kind":"google-drive","target":"drive:GitGood"}]
 ```
 
-Set this as `GITGOOD_BACKUP_DESTINATIONS`. On Windows use absolute paths such as
-`D:/Backups/GitGood`, or an accessible UNC share. NAS paths must already exist;
-mount SMB/NFS using the operating system and give the service account write access.
-Verify that the mount is actually present: an existing directory does not prove
-that a NAS is mounted. Container deployments must bind-mount the destination.
-Destinations and staging must be outside all source storage, including symlink targets.
+Paths must be absolute. On Windows use paths such as `D:/Backups/GitGood` or a UNC
+share. NAS paths must already exist; mount SMB/NFS with the operating system and give
+the service account write access. An existing directory does not prove a NAS is
+mounted, so use **Test**. Container deployments must bind-mount the destination.
+Destinations and staging must be outside GitGood's data, repository and LFS
+directories, including symlink targets; the worker refuses them.
 
 For Google Drive, install **rclone in the server runtime** (not bundled in the
-stock image), run `rclone config` under the service identity to authorize a Drive
-remote named `drive`, and protect its configuration file. `RCLONE_CONFIG` can point
-to a mounted configuration file; `GITGOOD_RCLONE_BIN` can specify an executable.
-`GITGOOD_BACKUP_STAGING` defaults to `./backups`; use a dedicated disk with enough
-free space for a complete copy. Each run uses a unique directory, then `rclone copy`
-and `rclone check`. Each rclone phase has a one-hour deadline. Cloud failures retain
-the local copy. Backups are not automatically encrypted; use OS encryption or an
-rclone crypt remote and keep recovery keys separately.
+stock image), run `rclone config` under the service identity to authorise a Drive
+remote, and protect its configuration file. `RCLONE_CONFIG` can point to a mounted
+configuration file; `GITGOOD_RCLONE_BIN` can specify the executable.
+`GITGOOD_BACKUP_STAGING` defaults to `./backups`; use a disk with room for a full
+copy. Each run is staged locally, then `rclone copy` and `rclone check` run, each with
+a one-hour deadline. Cloud failures keep the local copy. Backups are not encrypted
+by GitGood; use disk encryption or an rclone crypt remote and keep its keys elsewhere.
 
-The worker runs separately from the HTTP process so filesystem copying does not
-block its event loop. One web-triggered backup runs at a time **per server process**;
-multiple application replicas or simultaneous CLI backups are not coordinated.
-The UI keeps the last 20 jobs in memory; history resets when the server restarts.
-There is no scheduler, automatic retention, remote restore, or in-browser OAuth yet.
+The worker runs as a separate process so copying never blocks the web server. Run a
+single application process per data directory; schedules are not coordinated
+across replicas, and CLI backups are not counted as running jobs.
 
 The SQLite database is snapshotted with VACUUM INTO; repositories, LFS and release
 assets are copied sequentially. **Pause writes during backup** for a cross-store

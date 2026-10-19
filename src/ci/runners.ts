@@ -9,9 +9,16 @@ export const RUNNER_STALE_JOB_MS = 15 * 60_000;
 export const RUNNER_MAX_LOG_LINES = 4000;
 export const RUNNER_MAX_LINE_CHARS = 2000;
 
+export const MAX_SCOPED_RUNNERS = 20;
+
+export type RunnerScope = { kind: "instance" } | { kind: "user"; userId: number } | { kind: "repo"; repoId: number };
+
 export interface RunnerRow {
   id: number;
   name: string;
+  scope: "instance" | "user" | "repo";
+  owner_user_id: number | null;
+  repo_id: number | null;
   token_hash: string;
   token_prefix: string;
   created_by: number | null;
@@ -33,12 +40,36 @@ export interface RunnerSummary {
   paused: boolean;
   online: boolean;
   active_jobs: number;
+  scope: "instance" | "user" | "repo";
+  scope_label: string;
+}
+
+function scopeLabel(row: RunnerRow): string {
+  if (row.scope === "user" && row.owner_user_id !== null) {
+    return one<{ username: string }>("SELECT username FROM users WHERE id = ?", row.owner_user_id)?.username ?? "deleted user";
+  }
+  if (row.scope === "repo" && row.repo_id !== null) {
+    const repo = one<{ owner: string; name: string }>(
+      "SELECT COALESCE(o.name, u.username) AS owner, r.name FROM repos r JOIN users u ON u.id = r.owner_id LEFT JOIN orgs o ON o.id = r.org_id WHERE r.id = ?",
+      row.repo_id,
+    );
+    return repo ? `${repo.owner}/${repo.name}` : "deleted repository";
+  }
+  return "All repositories";
+}
+
+function scopeWhere(scope: RunnerScope): { sql: string; args: number[] } {
+  if (scope.kind === "user") return { sql: "scope = 'user' AND owner_user_id = ?", args: [scope.userId] };
+  if (scope.kind === "repo") return { sql: "scope = 'repo' AND repo_id = ?", args: [scope.repoId] };
+  return { sql: "scope = 'instance'", args: [] };
 }
 
 export function runnerSummary(row: RunnerRow, activeJobs = 0): RunnerSummary {
   return {
     id: row.id,
     name: row.name,
+    scope: row.scope,
+    scope_label: scopeLabel(row),
     token_prefix: row.token_prefix,
     created_at: row.created_at,
     last_seen_at: row.last_seen_at,
@@ -50,28 +81,56 @@ export function runnerSummary(row: RunnerRow, activeJobs = 0): RunnerSummary {
   };
 }
 
-export function listRunners(): RunnerSummary[] {
+export function listRunners(scope: RunnerScope | null = null): RunnerSummary[] {
   const active = new Map(
     all<{ runner_id: number; n: number }>(
       "SELECT runner_id, COUNT(*) AS n FROM ci_runs WHERE status = 'running' AND runner_id IS NOT NULL GROUP BY runner_id",
     ).map((r) => [r.runner_id, r.n]),
   );
-  return all<RunnerRow>("SELECT * FROM ci_runners ORDER BY id").map((row) => runnerSummary(row, active.get(row.id) ?? 0));
+  const filter = scope ? scopeWhere(scope) : null;
+  const rows = filter
+    ? all<RunnerRow>(`SELECT * FROM ci_runners WHERE ${filter.sql} ORDER BY id`, ...filter.args)
+    : all<RunnerRow>("SELECT * FROM ci_runners ORDER BY id");
+  return rows.map((row) => runnerSummary(row, active.get(row.id) ?? 0));
 }
 
-export function onlineRunnerCount(): number {
-  return one<{ n: number }>("SELECT COUNT(*) AS n FROM ci_runners WHERE paused = 0 AND last_seen_at >= ?", now() - RUNNER_ONLINE_MS)?.n ?? 0;
+export function findScopedRunner(id: number, scope: RunnerScope): RunnerRow | null {
+  const filter = scopeWhere(scope);
+  return one<RunnerRow>(`SELECT * FROM ci_runners WHERE id = ? AND ${filter.sql}`, id, ...filter.args);
 }
 
-export function createRunner(name: string, createdBy: number | null): { runner: RunnerSummary; token: string } {
+export function countScopedRunners(scope: RunnerScope): number {
+  const filter = scopeWhere(scope);
+  return one<{ n: number }>(`SELECT COUNT(*) AS n FROM ci_runners WHERE ${filter.sql}`, ...filter.args)?.n ?? 0;
+}
+
+export function onlineRunnerCount(repo: { id: number; owner_id: number; org_id: number | null } | null = null): number {
+  const since = now() - RUNNER_ONLINE_MS;
+  if (!repo) return one<{ n: number }>("SELECT COUNT(*) AS n FROM ci_runners WHERE paused = 0 AND last_seen_at >= ?", since)?.n ?? 0;
+  return (
+    one<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM ci_runners WHERE paused = 0 AND last_seen_at >= ?
+         AND (scope = 'instance' OR (scope = 'repo' AND repo_id = ?) OR (scope = 'user' AND owner_user_id = ? AND ? = 1))`,
+      since,
+      repo.id,
+      repo.owner_id,
+      repo.org_id === null ? 1 : 0,
+    )?.n ?? 0
+  );
+}
+
+export function createRunner(name: string, createdBy: number | null, scope: RunnerScope = { kind: "instance" }): { runner: RunnerSummary; token: string } {
   const token = `${RUNNER_TOKEN_PREFIX}${randomBytes(32).toString("base64url")}`;
   const id = run(
-    "INSERT INTO ci_runners (name, token_hash, token_prefix, created_by, created_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO ci_runners (name, token_hash, token_prefix, created_by, created_at, scope, owner_user_id, repo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     name,
     sha256Hex(token),
     token.slice(0, 10),
     createdBy,
     now(),
+    scope.kind,
+    scope.kind === "user" ? scope.userId : null,
+    scope.kind === "repo" ? scope.repoId : null,
   );
   const row = one<RunnerRow>("SELECT * FROM ci_runners WHERE id = ?", id);
   if (!row) throw new Error("runner was not persisted");
@@ -81,7 +140,7 @@ export function createRunner(name: string, createdBy: number | null): { runner: 
 export function deleteRunner(id: number): boolean {
   return transaction(() => {
     for (const job of all<{ id: number }>("SELECT id FROM ci_runs WHERE runner_id = ? AND status = 'running'", id)) {
-      failRunnerJob(job.id, "Runner was removed by an administrator while this job was running.");
+      failRunnerJob(job.id, "The runner was removed while this job was running.");
     }
     return changes("DELETE FROM ci_runners WHERE id = ?", id) > 0;
   });
@@ -124,9 +183,17 @@ export function sweepStaleRunnerJobs(): number {
 export function claimNextRun(runner: RunnerRow): CiRunRow | null {
   if (runner.paused === 1) return null;
   return transaction(() => {
-    const next = one<{ id: number }>(
-      "SELECT id FROM ci_runs WHERE executor = 'runner' AND status = 'queued' ORDER BY id LIMIT 1",
-    );
+    const next =
+      runner.scope === "repo"
+        ? one<{ id: number }>("SELECT id FROM ci_runs WHERE executor = 'runner' AND status = 'queued' AND repo_id = ? ORDER BY id LIMIT 1", runner.repo_id ?? -1)
+        : runner.scope === "user"
+          ? one<{ id: number }>(
+              `SELECT c.id FROM ci_runs c JOIN repos r ON r.id = c.repo_id
+                WHERE c.executor = 'runner' AND c.status = 'queued' AND r.owner_id = ? AND r.org_id IS NULL
+                ORDER BY c.id LIMIT 1`,
+              runner.owner_user_id ?? -1,
+            )
+          : one<{ id: number }>("SELECT id FROM ci_runs WHERE executor = 'runner' AND status = 'queued' ORDER BY id LIMIT 1");
     if (!next) return null;
     const claimed = changes(
       "UPDATE ci_runs SET status = 'running', runner_id = ?, heartbeat_at = ? WHERE id = ? AND status = 'queued'",

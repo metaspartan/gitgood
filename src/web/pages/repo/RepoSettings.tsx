@@ -7,6 +7,7 @@ import { useState, useEffect, type ReactNode } from "react";
 import { api } from "../../api.ts";
 import { ErrorBanner, useAsync } from "../../components.tsx";
 import { Switch } from "../../components/Switch.tsx";
+import { RunnersPanel } from "../../components/RunnersPanel.tsx";
 import { navigate } from "../../router.tsx";
 import { PushPolicyPanel } from "./PushPolicyPanel.tsx";
 import { WebhookManager } from "./WebhookManager.tsx";
@@ -80,6 +81,12 @@ export function RepoSettings({ owner, repo }: { owner: string; repo: string }): 
           label="Actions"
           hint="Run the workflow in .gitgood-ci.yml on every push. Jobs execute on the instance's runners."
         />
+      </div>
+
+      <div className="repository-settings-section">
+        <h3>Actions runners</h3>
+        <p className="small muted">Runners registered here only take jobs from this repository. Instance and account runners can also run its jobs.</p>
+        <RunnersPanel base={`/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/runners`} emptyHint="Register a runner to run this repository's jobs on your own machine." />
       </div>
 
       <div className="repository-settings-section"><PushPolicyPanel owner={owner} repo={repo} /></div>

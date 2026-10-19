@@ -2171,3 +2171,6 @@ html[data-theme] .profile-facts a:hover { color: var(--link); }
 .commit-email-form { margin-top: var(--s3); flex-wrap: nowrap; }
 .commit-email-form input { flex: 1; max-width: 440px; }
 textarea[name="bio"], .profile-edit-form textarea, .comment-editor-body textarea { font-family: inherit; font-size: 14px; line-height: 1.5; }
+.email-suggestions { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s5); }
+.settings-minor-heading { margin: 0; font-size: 16px; font-weight: 600; }
+.email-suggestions p { margin: 0; }

@@ -60,10 +60,13 @@ export function registerUserRoutes(router: Router): void {
     const offset = Number.isFinite(tz) ? Math.max(-840, Math.min(840, tz)) : 0;
     const rawYear = ctx.url.searchParams.get("year");
     const year = rawYear && /^\d{4}$/.test(rawYear) ? Number(rawYear) : null;
-    const repos = contributedRepoIds(row.id)
+    const all = contributedRepoIds(row.id)
       .map((id) => findRepoById(id))
-      .filter((repo): repo is RepoRecord => repo !== null && canRead(repo, ctx.auth));
-    const report = await contributionReport({ user: row, emails: allCommitEmails(row), repos, year, offsetMinutes: offset, at: Date.now() });
+      .filter((repo): repo is RepoRecord => repo !== null);
+    const includePrivate = row.show_private_contributions === 1;
+    const repos = all.filter((repo) => includePrivate || canRead(repo, ctx.auth));
+    const hiddenRepoIds = new Set(repos.filter((repo) => !canRead(repo, ctx.auth)).map((repo) => repo.id));
+    const report = await contributionReport({ user: row, emails: allCommitEmails(row), repos, hiddenRepoIds, year, offsetMinutes: offset, at: Date.now() });
     return json(report, { headers: { "cache-control": "private, max-age=60" } });
   });
 

@@ -51,7 +51,7 @@ export function profileFieldsJson(row: UserRow): Record<string, string> {
 }
 
 export function selfUserJson(row: UserRow): Record<string, unknown> {
-  return { ...userJson(row), ...profileFieldsJson(row), email: row.email };
+  return { ...userJson(row), ...profileFieldsJson(row), email: row.email, show_private_contributions: row.show_private_contributions === 1 };
 }
 
 export function repoJson(repo: RepoRecord): Record<string, unknown> {

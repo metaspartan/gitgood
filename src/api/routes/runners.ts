@@ -1,14 +1,18 @@
-import { requireInstanceAdmin } from "../../auth/service.ts";
+import { requireInstanceAdmin, requireUser, requireWrite } from "../../auth/service.ts";
 import { ciUsesRunners } from "../../ci/policy.ts";
 import {
   appendRunnerLog,
   authenticateRunner,
   claimNextRun,
   completeRunnerRun,
+  countScopedRunners,
   createRunner,
   deleteRunner,
+  findScopedRunner,
   heartbeatRun,
   listRunners,
+  MAX_SCOPED_RUNNERS,
+  type RunnerScope,
   runnerOwnsRun,
   setRunnerPaused,
   sweepStaleRunnerJobs,
@@ -16,12 +20,12 @@ import {
 } from "../../ci/runners.ts";
 import { readWorkflowAt } from "../../ci/scheduler.ts";
 import { parseWorkflow } from "../../ci/workflow.ts";
-import { findRepoById, repoDiskPath } from "../../data/repos.ts";
+import { findRepoById, isOwner, repoDiskPath } from "../../data/repos.ts";
 import { archiveStream } from "../../git/archive.ts";
-import { notFound, unauthorized } from "../../lib/errors.ts";
+import { badRequest, forbidden, notFound, unauthorized } from "../../lib/errors.ts";
 import { json, readJson } from "../../lib/http.ts";
 import * as v from "../../lib/validate.ts";
-import { param, positiveId } from "../helpers.ts";
+import { loadReadableRepo, param, positiveId } from "../helpers.ts";
 import { recordAudit } from "../../data/audit.ts";
 import type { RouteContext, Router } from "../router.ts";
 
@@ -48,7 +52,50 @@ function ownedRun(ctx: RouteContext, runner: RunnerRow) {
   return run;
 }
 
+function registerScopedRunnerRoutes(router: Router, base: string, resolve: (ctx: RouteContext, mutating: boolean) => { scope: RunnerScope; userId: number }): void {
+  router.get(base, (ctx) => {
+    const { scope } = resolve(ctx, false);
+    return json({ items: listRunners(scope), mode_uses_runners: ciUsesRunners(), max: MAX_SCOPED_RUNNERS });
+  });
+
+  router.post(base, async (ctx) => {
+    const { scope, userId } = resolve(ctx, true);
+    const body = await readJson(ctx.request, createSchema);
+    if (countScopedRunners(scope) >= MAX_SCOPED_RUNNERS) throw badRequest(`You can register up to ${MAX_SCOPED_RUNNERS} runners here`);
+    const created = createRunner(body.name, userId, scope);
+    return json({ runner: created.runner, token: created.token }, { status: 201 });
+  });
+
+  router.patch(`${base}/:id`, async (ctx) => {
+    const { scope } = resolve(ctx, true);
+    const id = positiveId(param(ctx, "id"));
+    if (!findScopedRunner(id, scope)) throw notFound("Runner not found");
+    const body = await readJson(ctx.request, pauseSchema);
+    return json({ runner: setRunnerPaused(id, body.paused) });
+  });
+
+  router.delete(`${base}/:id`, (ctx) => {
+    const { scope } = resolve(ctx, true);
+    const id = positiveId(param(ctx, "id"));
+    if (!findScopedRunner(id, scope)) throw notFound("Runner not found");
+    deleteRunner(id);
+    return new Response(null, { status: 204 });
+  });
+}
+
 export function registerRunnerRoutes(router: Router): void {
+  registerScopedRunnerRoutes(router, "/api/user/runners", (ctx, mutating) => {
+    const principal = mutating ? requireWrite(ctx.auth) : requireUser(ctx.auth);
+    return { scope: { kind: "user", userId: principal.userId }, userId: principal.userId };
+  });
+
+  registerScopedRunnerRoutes(router, "/api/repos/:owner/:name/runners", (ctx, mutating) => {
+    const repo = loadReadableRepo(ctx);
+    const principal = mutating ? requireWrite(ctx.auth) : requireUser(ctx.auth);
+    if (!isOwner(repo, ctx.auth) && !principal.isAdmin) throw forbidden("Only repository administrators can manage its runners");
+    return { scope: { kind: "repo", repoId: repo.id }, userId: principal.userId };
+  });
+
   router.get("/api/admin/runners", (ctx) => {
     requireInstanceAdmin(ctx.auth, false);
     return json({ items: listRunners(), mode_uses_runners: ciUsesRunners() });

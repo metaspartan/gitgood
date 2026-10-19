@@ -13,6 +13,7 @@ export interface User {
   location?: string;
   website?: string;
   has_profile_readme?: boolean;
+  show_private_contributions?: boolean;
 }
 
 export interface ProfileFields {
@@ -240,7 +241,7 @@ export interface ContributionCalendar {
   from: string;
   to: string;
   total: number;
-  breakdown: { commits: number; issues: number; pulls: number; comments: number; repositories: number };
+  breakdown: { commits: number; issues: number; pulls: number; comments: number; repositories: number; private: number };
   days: { date: string; count: number }[];
   months: {
     month: string;
@@ -248,6 +249,7 @@ export interface ContributionCalendar {
     repositories: { repo: string; created_at: number }[];
     issues: { repo: string; count: number }[];
     pulls: { repo: string; count: number }[];
+    private: number;
   }[];
   joined_at: number;
 }
@@ -545,4 +547,55 @@ export interface Release {
   created_at: number;
   updated_at: number;
   assets: ReleaseAsset[];
+}
+
+export interface InstanceConfiguration {
+  signup: boolean;
+  repositoryCreation: boolean;
+  secureCookies: boolean;
+  sshConfigured: boolean;
+  privateWebhooks: boolean;
+  maxRepoBytes: number;
+  maxLfsBytes: number;
+  maxBodyBytes: number;
+  gitConcurrency: number;
+  requestLimit: number;
+  requestWindowMs: number;
+  indexFiles: number;
+  indexFileBytes: number;
+}
+
+export type BackupKind = "local" | "nas" | "google-drive";
+export type BackupSchedule = "manual" | "daily" | "weekly";
+
+export interface BackupDestinationInput {
+  id: string;
+  name: string;
+  kind: BackupKind;
+  target: string;
+  schedule: BackupSchedule;
+  hour: number;
+  weekday: number;
+  keep: number;
+}
+
+export interface BackupDestinationInfo extends Omit<BackupDestinationInput, "target"> {
+  target?: string;
+  source: "admin" | "environment";
+  next_run_at: number | null;
+  last_job: { id: string; state: "running" | "completed" | "failed"; started_at: number; finished_at: number | null; error: string | null } | null;
+}
+
+export interface BackupJobInfo {
+  id: string;
+  destination_id: string;
+  destination_name: string;
+  trigger: "manual" | "scheduled";
+  state: "running" | "completed" | "failed";
+  started_at: number;
+  finished_at: number | null;
+  bytes: number | null;
+  error: string | null;
+  location: string | null;
+  pruned: number;
 }

@@ -1,0 +1,32 @@
+.backup-stats { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.backup-status-value { font-size: 20px; line-height: 39px; }
+.backup-destinations { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.backup-destination { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: var(--s3); align-items: start; padding: var(--s4); border-top: 1px solid var(--border); }
+.backup-destination:first-child { border-top: none; }
+.backup-destination-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; color: var(--text-dim); background: var(--bg-inset); }
+.backup-destination-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.backup-destination-title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+.backup-target { overflow-wrap: anywhere; }
+.backup-destination-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.backup-state { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+.backup-state .runner-dot { margin-right: 0; }
+.backup-state.is-completed .runner-dot { background: var(--success); }
+.backup-state.is-failed .runner-dot { background: var(--danger); }
+.backup-state.is-running .runner-dot { background: var(--warning); animation: backup-pulse 1.2s ease-in-out infinite; }
+@keyframes backup-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .backup-state.is-running .runner-dot { animation: none; } }
+.backup-test { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border); }
+.backup-test.is-ok { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--border)); background: color-mix(in srgb, var(--success) 8%, transparent); }
+.backup-test.is-bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.backup-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s3); }
+.backup-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+.backup-form label .small { font-weight: 400; }
+.backup-form-wide { grid-column: 1 / -1; }
+.admin-table tr.is-pruned td { opacity: .6; }
+.backup-location { min-height: 24px; padding: 0 6px; gap: 4px; font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.backup-checklist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 700px) {
+  .backup-destination { grid-template-columns: minmax(0, 1fr); }
+  .backup-destination-icon { display: none; }
+  .backup-destination-actions { justify-content: flex-start; }
+}

@@ -9,7 +9,7 @@ import { listRunHistory, getRun, readLog, countPendingRuns } from "../../ci/stor
 import { ciEnabled, ciRunnerStatus } from "../../ci/policy.ts";
 import { onlineRunnerCount } from "../../ci/runners.ts";
 import { CI_FILE, parseWorkflow } from "../../ci/workflow.ts";
-import { canWrite, repoDiskPath } from "../../data/repos.ts";
+import { canWrite, repoDiskPath, type RepoRecord } from "../../data/repos.ts";
 import { resolveRef } from "../../git/repo.ts";
 import {
   enqueueJobs,
@@ -37,7 +37,7 @@ function logOffset(raw: string | null, fallback: number): number {
   return value;
 }
 
-function runnerPayload() {
+function runnerPayload(repo: RepoRecord) {
   const runner = ciRunnerStatus();
   const stats = schedulerStats();
   return {
@@ -45,7 +45,7 @@ function runnerPayload() {
     enabled: runner.enabled,
     isolation: runner.isolation,
     notice: runner.notice,
-    runnersOnline: runner.mode === "runner" ? onlineRunnerCount() : null,
+    runnersOnline: runner.mode === "runner" ? onlineRunnerCount(repo) : null,
     active: stats.active,
     queued: stats.queued,
     pending: countPendingRuns(),
@@ -66,7 +66,7 @@ export function registerCiRoutes(router: Router): void {
       items: runs,
       next_before: page.length > limit ? runs[runs.length - 1]!.id : null,
       can_write: canWrite(repo, ctx.auth),
-      runner: runnerPayload(),
+      runner: runnerPayload(repo),
       scheduler: {
         active: schedulerStats().active,
         queued: schedulerStats().queued,

@@ -4,16 +4,19 @@ import { Avatar, EmptyState, ErrorBanner, timeAgo, useAsync } from "../component
 import { Link } from "../router.tsx";
 import type { User } from "../types.ts";
 import { Icon, type IconName } from "./Icons.tsx";
+import { RunnersPanel } from "./RunnersPanel.tsx";
+import { Switch } from "./Switch.tsx";
 
-export type SettingsSection = "profile" | "appearance" | "security" | "sessions" | "keys" | "tokens";
+export type SettingsSection = "profile" | "appearance" | "security" | "sessions" | "keys" | "tokens" | "runners";
 
-const SECTIONS: { id: SettingsSection; label: string; icon: IconName; group: "Account" | "Access" }[] = [
+const SECTIONS: { id: SettingsSection; label: string; icon: IconName; group: "Account" | "Access" | "Code and automation" }[] = [
   { id: "profile", label: "Public profile", icon: "eye", group: "Account" },
   { id: "appearance", label: "Appearance", icon: "gear", group: "Account" },
   { id: "security", label: "Password and authentication", icon: "lock", group: "Access" },
   { id: "sessions", label: "Sessions", icon: "device", group: "Access" },
   { id: "keys", label: "SSH keys", icon: "key", group: "Access" },
   { id: "tokens", label: "Personal access tokens", icon: "code", group: "Access" },
+  { id: "runners", label: "Runners", icon: "play", group: "Code and automation" },
 ];
 
 export function settingsSectionFrom(location: string): SettingsSection {
@@ -22,7 +25,7 @@ export function settingsSectionFrom(location: string): SettingsSection {
 }
 
 export function SettingsNav({ section, user }: { section: SettingsSection; user: User }): ReactNode {
-  const groups = ["Account", "Access"] as const;
+  const groups = ["Account", "Access", "Code and automation"] as const;
   return (
     <aside className="settings-nav">
       <div className="settings-identity">
@@ -36,7 +39,7 @@ export function SettingsNav({ section, user }: { section: SettingsSection; user:
       <nav aria-label="Settings">
         {groups.map((group) => (
           <div key={group} className="settings-nav-group">
-            {group === "Access" ? <div className="settings-nav-heading">Access</div> : null}
+            {group !== "Account" ? <div className="settings-nav-heading">{group}</div> : null}
             {SECTIONS.filter((item) => item.group === group).map((item) => (
               <Link
                 key={item.id}
@@ -158,6 +161,10 @@ export function SshKeysPanel(): ReactNode {
 
 export function CommitEmailsPanel(): ReactNode {
   const emails = useAsync(() => api.commitEmails(), []);
+  const suggestions = useAsync(() => api.commitEmailSuggestions(), []);
+  const account = useAsync(() => api.accountSettings(), []);
+  const [showPrivate, setShowPrivate] = useState<boolean | null>(null);
+  const privateOn = showPrivate ?? account.data?.user.show_private_contributions ?? false;
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -168,6 +175,7 @@ export function CommitEmailsPanel(): ReactNode {
     try {
       await action();
       emails.reload();
+      suggestions.reload();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not update emails");
     } finally {
@@ -212,6 +220,54 @@ export function CommitEmailsPanel(): ReactNode {
         <input type="email" value={draft} placeholder="Add a commit email" aria-label="Commit email" onChange={(event) => setDraft(event.target.value)} />
         <button type="submit" disabled={busy || !draft.trim() || (emails.data ? emails.data.items.length >= emails.data.max : false)}>Add</button>
       </form>
+      {(suggestions.data?.items.length ?? 0) > 0 ? (
+        <div className="email-suggestions">
+          <h3 className="settings-minor-heading">Found in your repositories</h3>
+          <p className="small muted">These author emails appear in commits to repositories you own and are not linked to any account. Add the ones that are yours.</p>
+          <ul className="ssh-key-list">
+            {suggestions.data!.items.map((item) => (
+              <li key={item.email} className="ssh-key-row">
+                <Icon name="commit" className="session-icon" />
+                <div className="session-text">
+                  <span>{item.email}</span>
+                  <div className="small faint">{item.name ? `${item.name} · ` : ""}{item.commits.toLocaleString()} commit{item.commits === 1 ? "" : "s"}</div>
+                </div>
+                <button type="button" className="small" disabled={busy} onClick={() => void run(() => api.addCommitEmail(item.email))}>Add</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div className="email-suggestions">
+        <h3 className="settings-minor-heading">Contributions</h3>
+        <Switch
+          checked={privateOn}
+          disabled={!account.data || busy}
+          onChange={(value) => {
+            setShowPrivate(value);
+            api.updateAccount({ show_private_contributions: value }).catch((cause: unknown) => {
+              setShowPrivate(!value);
+              setError(cause instanceof Error ? cause.message : "Could not save the setting");
+            });
+          }}
+          label="Include private contributions on my profile"
+          hint="Visitors see a count of your activity in private repositories on your contribution graph, never the repository names. You always see everything."
+        />
+      </div>
+    </section>
+  );
+}
+
+export function UserRunnersPanel(): ReactNode {
+  return (
+    <section className="card" aria-labelledby="runners-title">
+      <div className="settings-subhead">
+        <h2 id="runners-title">Runners</h2>
+      </div>
+      <p className="muted small">
+        Self-hosted runners registered here pick up Actions jobs from every repository you own. Jobs run in fresh containers on your machine, using your hardware and network.
+      </p>
+      <RunnersPanel base="/api/user/runners" emptyHint="Register a runner to run your repositories' jobs on your own machine." />
     </section>
   );
 }

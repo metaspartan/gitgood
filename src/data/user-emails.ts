@@ -18,6 +18,13 @@ export function allCommitEmails(user: { id: number; email: string }): string[] {
   });
 }
 
+export function emailClaimedByAnyone(email: string): boolean {
+  return (
+    one<{ id: number }>("SELECT id FROM users WHERE email = ? COLLATE NOCASE", email) !== null ||
+    one<{ user_id: number }>("SELECT user_id FROM user_emails WHERE email = ?", email) !== null
+  );
+}
+
 export function addCommitEmail(userId: number, raw: string): string {
   const email = raw.trim();
   if (email.length > 254 || !EMAIL.test(email)) throw badRequest("Enter a valid email address");

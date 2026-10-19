@@ -164,6 +164,9 @@ function ActivityTimeline({ data, name }: { data: ContributionCalendar; name: st
                   <RepoCounts rows={month.issues} unit="issue" />
                 </ActivityItem>
               ) : null}
+              {month.private ? (
+                <ActivityItem icon="lock" title={`${plural(month.private, "contribution")} in private repositories`} />
+              ) : null}
               {inRange && exhausted && month === data.months.at(-1) && month.month === joinedMonth ? (
                 <ActivityItem icon="star" title={`Joined GitGood on ${new Date(data.joined_at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}`} />
               ) : null}
@@ -234,6 +237,7 @@ export function ContributionGraph({ username, name }: { username: string; name: 
               {data ? (
                 <span className="small muted">
                   {plural(data.breakdown.commits, "commit")} · {plural(data.breakdown.pulls, "pull request")} · {plural(data.breakdown.issues, "issue")} · {plural(data.breakdown.comments, "comment")}
+                  {data.breakdown.private ? ` · ${plural(data.breakdown.private, "private contribution")}` : ""}
                 </span>
               ) : <span className="small">{"\u00a0"}</span>}
               <span className="spacer" />

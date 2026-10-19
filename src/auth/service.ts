@@ -28,6 +28,7 @@ export interface UserRow {
   credentials_changed_at: number | null;
   blocked_at?: number | null;
   bio?: string;
+  show_private_contributions?: number;
   company?: string;
   location?: string;
   website?: string;

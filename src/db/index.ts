@@ -98,6 +98,7 @@ export function migrate(): void {
   )`);
   db.exec("DROP TABLE IF EXISTS push_events");
   for (const column of ["bio", "company", "location", "website"]) addColumnIfMissing("users", column, "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing("users", "show_private_contributions", "INTEGER NOT NULL DEFAULT 0");
   db.exec(`CREATE TABLE IF NOT EXISTS user_emails (
     email TEXT PRIMARY KEY COLLATE NOCASE,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -131,6 +132,38 @@ export function migrate(): void {
   addColumnIfMissing("ci_runs", "executor", "TEXT NOT NULL DEFAULT 'local'");
   addColumnIfMissing("ci_runs", "runner_id", "INTEGER REFERENCES ci_runners(id) ON DELETE SET NULL");
   addColumnIfMissing("ci_runs", "heartbeat_at", "INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS backup_destinations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    target TEXT NOT NULL,
+    schedule TEXT NOT NULL DEFAULT 'manual',
+    hour INTEGER NOT NULL DEFAULT 3,
+    weekday INTEGER NOT NULL DEFAULT 0,
+    keep INTEGER NOT NULL DEFAULT 7,
+    last_scheduled_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS backup_jobs (
+    id TEXT PRIMARY KEY,
+    destination_id TEXT NOT NULL,
+    destination_name TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    state TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    bytes INTEGER,
+    error TEXT,
+    location TEXT,
+    pruned INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_backup_jobs_started ON backup_jobs(started_at DESC)");
+  db.exec("CREATE TABLE IF NOT EXISTS backup_env_schedules (id TEXT PRIMARY KEY, schedule TEXT NOT NULL, hour INTEGER NOT NULL, weekday INTEGER NOT NULL, keep INTEGER NOT NULL, last_scheduled_at INTEGER)");
+  addColumnIfMissing("ci_runners", "scope", "TEXT NOT NULL DEFAULT 'instance'");
+  addColumnIfMissing("ci_runners", "owner_user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
+  addColumnIfMissing("ci_runners", "repo_id", "INTEGER REFERENCES repos(id) ON DELETE CASCADE");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ci_runners_scope ON ci_runners(scope, owner_user_id, repo_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_ci_runs_queue ON ci_runs(executor, status, id)");
 
   addColumnIfMissing("issues", "milestone_id", "INTEGER REFERENCES milestones(id) ON DELETE SET NULL");

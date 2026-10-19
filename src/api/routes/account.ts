@@ -6,7 +6,9 @@ import { bootstrapPending, clearBootstrapFlag } from "../../auth/bootstrap.ts";
 import { findUserById, listUserSessions, requireUser, revokeOtherSessions, revokeUserSession, SESSION_COOKIE, type UserRow } from "../../auth/service.ts";
 import { readCookie } from "../../lib/http.ts";
 import { notFound } from "../../lib/errors.ts";
-import { addCommitEmail, commitEmails, MAX_COMMIT_EMAILS, removeCommitEmail } from "../../data/user-emails.ts";
+import { addCommitEmail, allCommitEmails, commitEmails, emailClaimedByAnyone, MAX_COMMIT_EMAILS, removeCommitEmail } from "../../data/user-emails.ts";
+import { suggestCommitEmails } from "../../data/activity.ts";
+import { listReposByOwner } from "../../data/repos.ts";
 import { invalidatePrefix } from "../../lib/cache.ts";
 import { one, run } from "../../db/index.ts";
 import { selfUserJson } from "../serialize.ts";
@@ -28,6 +30,7 @@ const profileSchema = v.strictObject({
   company: v.optional(v.string({ max: 100 })),
   location: v.optional(v.string({ max: 100 })),
   website: v.optional(v.string({ max: 200 })),
+  show_private_contributions: v.optional(v.boolean()),
 });
 
 export function normalizeWebsite(raw: string): string {
@@ -71,6 +74,14 @@ export function registerAccountRoutes(router: Router): void {
   router.get("/api/account/emails", (ctx) => {
     const user = caller(ctx);
     return json({ primary: user.email, items: commitEmails(user.id), max: MAX_COMMIT_EMAILS });
+  });
+
+  router.get("/api/account/emails/suggestions", async (ctx) => {
+    const user = caller(ctx);
+    const owned = listReposByOwner(user.id).filter((repo) => repo.org_id === null && repo.fork_of === null);
+    const mine = new Set(allCommitEmails(user).map((email) => email.toLowerCase()));
+    const items = await suggestCommitEmails(owned, (email) => mine.has(email.toLowerCase()) || emailClaimedByAnyone(email));
+    return json({ items });
   });
 
   router.post("/api/account/emails", async (ctx) => {
@@ -155,6 +166,7 @@ export function registerAccountRoutes(router: Router): void {
       if (value !== undefined) run(`UPDATE users SET ${field} = ? WHERE id = ?`, value.trim().replace(/\s+/g, " "), user.id);
     }
     if (body.website !== undefined) run("UPDATE users SET website = ? WHERE id = ?", normalizeWebsite(body.website), user.id);
+    if (body.show_private_contributions !== undefined) run("UPDATE users SET show_private_contributions = ? WHERE id = ?", body.show_private_contributions ? 1 : 0, user.id);
 
     if (changedCredential) clearBootstrapFlag(user.id);
 

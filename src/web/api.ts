@@ -47,6 +47,10 @@ import type {
   ReactionSummary,
   ContributionCalendar,
   ProfileFields,
+  InstanceConfiguration,
+  BackupDestinationInfo,
+  BackupJobInfo,
+  BackupDestinationInput,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -137,8 +141,14 @@ function encodeRepo(owner: string, name: string): string {
 }
 
 export const api = {
-  backups: (signal?: AbortSignal) => request<{ configuration: { signup: boolean; repositoryCreation: boolean; secureCookies: boolean; sshConfigured: boolean; privateWebhooks: boolean; maxRepoBytes: number; maxLfsBytes: number; maxBodyBytes: number; gitConcurrency: number; requestLimit: number; requestWindowMs: number; indexFiles: number; indexFileBytes: number }; destinations: Array<{ id: string; name: string; kind: "local" | "nas" | "google-drive" }>; jobs: Array<{ id: string; destination: string; state: "running" | "completed" | "failed"; started: number; finished: number | null }>; active: boolean }>("/api/admin/backups", { signal }),
+  configuration: (signal?: AbortSignal) => request<{ configuration: InstanceConfiguration }>("/api/admin/configuration", { signal }),
+  backups: (signal?: AbortSignal) =>
+    request<{ destinations: BackupDestinationInfo[]; jobs: BackupJobInfo[]; active: boolean; timezone: string; max_destinations: number }>("/api/admin/backups", { signal }),
   startBackup: (destination: string) => post<{ id: string }>("/api/admin/backups", { destination }),
+  createBackupDestination: (input: BackupDestinationInput) => post<BackupDestinationInfo>("/api/admin/backups/destinations", input),
+  updateBackupDestination: (id: string, input: Partial<BackupDestinationInput>) => patch<BackupDestinationInfo>(`/api/admin/backups/destinations/${encodeURIComponent(id)}`, input),
+  deleteBackupDestination: (id: string) => request<null>(`/api/admin/backups/destinations/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testBackupDestination: (id: string) => post<{ ok: boolean; message: string; free_bytes: number | null }>(`/api/admin/backups/destinations/${encodeURIComponent(id)}/test`, {}),
   me: () => request<{ user: User | null }>("/api/auth/me"),
   login: (username: string, password: string) =>
     post<LoginResult>("/api/auth/login", { username, password }),
@@ -353,6 +363,7 @@ export const api = {
       `/api/users/${encodeURIComponent(username)}/contributions?tz=${-new Date().getTimezoneOffset()}${year === null ? "" : `&year=${year}`}`,
     ),
   commitEmails: () => request<{ primary: string; items: string[]; max: number }>("/api/account/emails"),
+  commitEmailSuggestions: () => request<{ items: { email: string; name: string; commits: number }[] }>("/api/account/emails/suggestions"),
   addCommitEmail: (email: string) => post<{ primary: string; items: string[]; max: number }>("/api/account/emails", { email }),
   removeCommitEmail: (email: string) => del<{ primary: string; items: string[]; max: number }>(`/api/account/emails/${encodeURIComponent(email)}`),
   userPins: (username: string) => request<{ items: Repo[] }>(`/api/users/${encodeURIComponent(username)}/pins`),
@@ -530,7 +541,7 @@ export const api = {
       `${encodeRepo(owner, name)}/ci/runs/${id}/log?after=${after}&limit=500`, { signal },
     ),
   accountSettings: () => request<AccountSettings>("/api/account"),
-  updateAccount: (input: { username?: string; email?: string } & ProfileFields) =>
+  updateAccount: (input: { username?: string; email?: string; show_private_contributions?: boolean } & ProfileFields) =>
     patch<{ user: User; bootstrap_pending: boolean }>("/api/account", input),
   changePassword: (currentPassword: string, newPassword: string) =>
     post<{ ok: true }>("/api/account/password", {

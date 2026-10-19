@@ -13,7 +13,7 @@ import { Link } from "../router.tsx";
 
 export function ConfigurationPage() {
   const { user } = useSession();
-  const state = useLive(signal => user?.is_admin ? api.backups(signal) : Promise.resolve(null), [user?.id]);
+  const state = useLive(signal => user?.is_admin ? api.configuration(signal) : Promise.resolve(null), [user?.id]);
   const storage = useLive(async (signal) => {
     if (!user?.is_admin) return null;
     const response = await fetch("/api/admin/storage", { credentials: "same-origin", signal });
@@ -23,8 +23,8 @@ export function ConfigurationPage() {
   if (!user?.is_admin) return <div className="card"><h2>Administrator access required</h2></div>;
   const configuration = state.data?.configuration;
   return <div className="backup-page">
-    <header className="backup-heading"><div><p className="backup-eyebrow">INSTANCE ADMINISTRATION</p><h1>Configuration</h1><p className="muted">Understand your deployment. Review security and capacity before changing limits.</p></div><LiveStatus {...storage} /></header>
-    <nav className="tabs" aria-label="Administration"><Link to="/admin/backups">Backups</Link><Link to="/admin/configuration" className="active" ariaCurrent="page">Configuration</Link></nav>
+    <div className="admin-head"><h1 className="admin-title">Configuration</h1><span className="spacer" /><LiveStatus {...storage} /></div>
+    <p className="muted admin-lede">Understand your deployment. Review security and capacity before changing limits. Sign-up and repository creation are set in <Link to="/admin/settings">Settings</Link>; backups in <Link to="/admin/backups">Backups</Link>.</p>
     <ErrorBanner message={state.error} />
     <StorageOverview data={storage.data} />
     <AppearanceSettings />
@@ -38,8 +38,8 @@ export function ConfigurationPage() {
             <p className="muted small">Effective limits and security posture. Most settings are server-managed and require a restart. The default repository quota above is editable and applies immediately.</p>
             <dl className="admin-config-grid">
               {[
-                ["Public signups", configuration.signup ? "Enabled" : "Disabled", "GITGOOD_ALLOW_SIGNUP"],
-                ["Repository creation", configuration.repositoryCreation ? "Enabled" : "Disabled", "GITGOOD_ALLOW_REPO_CREATION"],
+                ["Public signups", configuration.signup ? "Enabled" : "Disabled", "Admin → Settings (initial value GITGOOD_ALLOW_SIGNUP)"],
+                ["Repository creation", configuration.repositoryCreation ? "Everyone" : "Administrators only", "Admin → Settings (initial value GITGOOD_ALLOW_REPO_CREATION)"],
                 ["Secure session cookies", configuration.secureCookies ? "Required" : "Development HTTP", "NODE_ENV / GITGOOD_BASE_URL"],
                 ["SSH integration", configuration.sshConfigured ? "Configured · not connection tested" : "Not configured", "GITGOOD_SSH_COMMAND"],
                 ["Private webhook destinations", configuration.privateWebhooks ? "Allowed — review network access" : "Blocked by default", "GITGOOD_WEBHOOK_ALLOW_PRIVATE"],

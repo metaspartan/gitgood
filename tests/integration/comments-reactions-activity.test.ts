@@ -138,16 +138,16 @@ type Calendar = {
   years: number[];
   from: string;
   to: string;
-  breakdown: { commits: number; issues: number; pulls: number; comments: number; repositories: number };
+  breakdown: { commits: number; issues: number; pulls: number; comments: number; repositories: number; private: number };
   days: { date: string; count: number }[];
-  months: { month: string; commits: { repo: string; count: number }[]; repositories: { repo: string }[]; issues: { repo: string; count: number }[] }[];
+  months: { month: string; commits: { repo: string; count: number }[]; repositories: { repo: string }[]; issues: { repo: string; count: number }[]; private: number }[];
 };
 
 describe("contribution calendar", () => {
   test("commits come from git history by the account's email, case-insensitively, plus issues, comments and created repositories", async () => {
     const calendar = await me.call<Calendar>(`/api/users/${owner}/contributions`);
     expect(calendar.status).toBe(200);
-    expect(calendar.data.breakdown).toEqual({ commits: 6, issues: 2, pulls: 0, comments: 2, repositories: 2 });
+    expect(calendar.data.breakdown).toEqual({ commits: 6, issues: 2, pulls: 0, comments: 2, repositories: 2, private: 0 });
     expect(calendar.data.total).toBe(12);
     expect(calendar.data.days.at(-1)).toEqual({ date: dayKey(Date.now(), 0), count: 12 });
     expect(new Date(`${calendar.data.days[0]!.date}T00:00:00Z`).getUTCDay()).toBe(0);
@@ -165,7 +165,7 @@ describe("contribution calendar", () => {
   test("other people only see contributions to repositories they can read", async () => {
     for (const viewer of [them, anon]) {
       const calendar = await viewer.call<Calendar>(`/api/users/${owner}/contributions`);
-      expect(calendar.data.breakdown).toEqual({ commits: 4, issues: 1, pulls: 0, comments: 1, repositories: 1 });
+      expect(calendar.data.breakdown).toEqual({ commits: 4, issues: 1, pulls: 0, comments: 1, repositories: 1, private: 0 });
       expect(JSON.stringify(calendar.data.months)).not.toContain("secret");
     }
   });
@@ -246,5 +246,40 @@ describe("commit emails", () => {
   test("commit emails are never exposed on the public profile", async () => {
     const profile = await anon.call(`/api/users/${owner}`);
     expect(JSON.stringify(profile.data)).not.toContain("shared@example.com");
+  });
+});
+
+describe("suggested commit emails and private contribution counts", () => {
+  test("suggestions list unclaimed author emails from the user's own repositories, most commits first", async () => {
+    const mine = await me.call<{ items: { email: string; name: string; commits: number }[] }>("/api/account/emails/suggestions");
+    expect(mine.status).toBe(200);
+    expect(mine.data.items).toEqual([{ email: "stranger@example.com", name: "Activity", commits: 1 }]);
+    expect((await them.call<{ items: unknown[] }>("/api/account/emails/suggestions")).data.items).toEqual([]);
+    expect((await anon.call("/api/account/emails/suggestions")).status).toBe(401);
+  });
+
+  test("an email claimed by another account is never suggested", async () => {
+    expect((await them.call("/api/account/emails", "POST", { email: "stranger@example.com" })).status).toBe(201);
+    expect((await me.call<{ items: unknown[] }>("/api/account/emails/suggestions")).data.items).toEqual([]);
+    await them.call(`/api/account/emails/${encodeURIComponent("stranger@example.com")}`, "DELETE");
+  });
+
+  test("with private contributions shown, others see the same total but only anonymous private counts", async () => {
+    const own = (await me.call<Calendar>(`/api/users/${owner}/contributions`)).data;
+    const hiddenByDefault = (await anon.call<Calendar>(`/api/users/${owner}/contributions`)).data;
+    expect(hiddenByDefault.breakdown.private).toBe(0);
+    expect(hiddenByDefault.total).toBeLessThan(own.total);
+
+    const saved = await me.call<{ user: { show_private_contributions: boolean } }>("/api/account", "PATCH", { show_private_contributions: true });
+    expect(saved.data.user.show_private_contributions).toBe(true);
+    const shown = (await anon.call<Calendar>(`/api/users/${owner}/contributions`)).data;
+    expect(shown.total).toBe(own.total);
+    expect(shown.breakdown.private).toBe(own.total - hiddenByDefault.total);
+    expect(shown.months[0]!.private).toBeGreaterThan(0);
+    expect(JSON.stringify(shown)).not.toContain("secret");
+    expect(own.breakdown.private).toBe(0);
+
+    await me.call("/api/account", "PATCH", { show_private_contributions: false });
+    expect((await anon.call<Calendar>(`/api/users/${owner}/contributions`)).data.breakdown.private).toBe(0);
   });
 });

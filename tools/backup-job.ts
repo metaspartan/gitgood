@@ -1,40 +1,129 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statfsSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { config } from "../src/config.ts";
 import { runBackup } from "../src/lib/backup.ts";
-import { parseBackupDestinations } from "../src/lib/backup-destinations.ts";
+import { parseBackupDestinations, validateBackupDestination, type BackupDestination } from "../src/lib/backup-destinations.ts";
 
-const [destinationId, jobId] = process.argv.slice(2);
-if (!jobId || !/^backup-[0-9a-f-]{36}$/.test(jobId)) throw new Error("Invalid backup job ID");
-const destination = parseBackupDestinations(process.env.GITGOOD_BACKUP_DESTINATIONS).find(d => d.id === destinationId);
-if (!destination) throw new Error("Unknown destination");
-const stagingRoot = resolve(process.env.GITGOOD_BACKUP_STAGING ?? "./backups");
-const requestedRoot = destination.kind === "google-drive" ? stagingRoot : resolve(destination.target);
-if (destination.kind === "nas" && !existsSync(requestedRoot)) throw new Error("NAS mount must already exist");
-mkdirSync(requestedRoot, { recursive: true });
-const localRoot = realpathSync(requestedRoot);
-for (const source of [config.dataDir, config.repoRoot, config.lfsRoot]) {
-  const rel = relative(existsSync(source) ? realpathSync(source) : resolve(source), localRoot);
-  if (!rel || (rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\") && !isAbsolute(rel))) {
-    throw new Error("Backup destination must be outside source storage");
-  }
+const JOB_ID = /^backup-[0-9a-f-]{36}$/;
+
+class SafeError extends Error {}
+
+function safeMessage(error: unknown): string {
+  if (error instanceof SafeError) return error.message;
+  const code = (error as { code?: string } | null)?.code;
+  if (code === "ENOSPC") return "No space left on the destination";
+  if (code === "EACCES" || code === "EPERM") return "Permission denied writing to the destination";
+  if (code === "ENOENT") return "A required path does not exist on the server";
+  if (code === "EROFS") return "The destination is read-only";
+  return "Backup failed; see the server log for details";
 }
-const outDir = join(localRoot, jobId);
-mkdirSync(dirname(outDir), { recursive: true });
-runBackup({ outDir });
-const releases = join(config.dataDir, "releases");
-if (existsSync(releases)) cpSync(releases, join(outDir, "releases"), { recursive: true });
-const manifestPath = join(outDir, "manifest.json");
-const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-manifest.releaseAssetsIncluded = true;
-manifest.consistency = "SQLite snapshot with sequential file copies; quiesce writes for a cross-store consistent recovery point";
-writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-if (destination.kind === "google-drive") {
-  const remote = `${destination.target.replace(/\/$/, "")}/${jobId}`;
-  for (const command of ["copy", "check"]) {
-    const proc = Bun.spawn([process.env.GITGOOD_RCLONE_BIN ?? "rclone", command, outDir, remote, "--retries", "2", "--contimeout", "15s", "--timeout", "2m"], { stdout: "ignore", stderr: "ignore" });
-    const timer = setTimeout(() => proc.kill("SIGKILL"), 60 * 60 * 1000);
-    const code = await proc.exited.finally(() => clearTimeout(timer));
-    if (code !== 0) throw new Error("Remote transfer or verification failed; local staging retained");
+
+function destinationFor(id: string): BackupDestination {
+  const inline = process.env.GITGOOD_BACKUP_JOB_DESTINATION;
+  if (inline) {
+    const destination = validateBackupDestination(JSON.parse(inline));
+    if (destination.id !== id) throw new SafeError("Destination mismatch");
+    return destination;
   }
+  const destination = parseBackupDestinations(process.env.GITGOOD_BACKUP_DESTINATIONS).find((d) => d.id === id);
+  if (!destination) throw new SafeError("Unknown destination");
+  return destination;
+}
+
+function localRootFor(destination: BackupDestination): string {
+  const stagingRoot = resolve(process.env.GITGOOD_BACKUP_STAGING ?? "./backups");
+  const requestedRoot = destination.kind === "google-drive" ? stagingRoot : resolve(destination.target);
+  if (destination.kind === "nas" && !existsSync(requestedRoot)) throw new SafeError("The NAS mount does not exist on the server");
+  mkdirSync(requestedRoot, { recursive: true });
+  const localRoot = realpathSync(requestedRoot);
+  for (const source of [config.dataDir, config.repoRoot, config.lfsRoot]) {
+    const rel = relative(existsSync(source) ? realpathSync(source) : resolve(source), localRoot);
+    if (!rel || (rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\") && !isAbsolute(rel))) {
+      throw new SafeError("The destination must be outside GitGood's own data directories");
+    }
+  }
+  return localRoot;
+}
+
+async function rclone(args: string[], timeoutMs: number): Promise<number> {
+  const proc = Bun.spawn([process.env.GITGOOD_RCLONE_BIN ?? "rclone", ...args], { stdout: "ignore", stderr: "ignore" });
+  const timer = setTimeout(() => proc.kill("SIGKILL"), timeoutMs);
+  return proc.exited.finally(() => clearTimeout(timer));
+}
+
+function remotePath(destination: BackupDestination, id: string): string {
+  return `${destination.target.replace(/\/$/, "")}/${id}`;
+}
+
+async function test(destination: BackupDestination): Promise<{ ok: boolean; message: string; free_bytes: number | null }> {
+  const localRoot = localRootFor(destination);
+  const probe = join(localRoot, `.gitgood-probe-${process.pid}`);
+  writeFileSync(probe, "ok");
+  unlinkSync(probe);
+  const stats = statfsSync(localRoot);
+  const free = Number(stats.bavail) * Number(stats.bsize);
+  if (destination.kind === "google-drive") {
+    const code = await rclone(["lsf", destination.target, "--max-depth", "1", "--contimeout", "15s", "--timeout", "30s"], 60_000).catch(() => -1);
+    if (code !== 0) return { ok: false, message: "Local staging is writable, but rclone could not reach the remote. Check the remote name and its authorisation.", free_bytes: free };
+    return { ok: true, message: "Staging is writable and the rclone remote is reachable.", free_bytes: free };
+  }
+  return { ok: true, message: "The destination is writable.", free_bytes: free };
+}
+
+async function backup(destination: BackupDestination, jobId: string): Promise<{ bytes: number; location: string; pruned: string[] }> {
+  const localRoot = localRootFor(destination);
+  const outDir = join(localRoot, jobId);
+  if (existsSync(outDir)) throw new SafeError("A backup with this ID already exists");
+  mkdirSync(dirname(outDir), { recursive: true });
+  runBackup({ outDir });
+  const releases = join(config.dataDir, "releases");
+  if (existsSync(releases)) cpSync(releases, join(outDir, "releases"), { recursive: true });
+  const manifestPath = join(outDir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.releaseAssetsIncluded = true;
+  manifest.consistency = "SQLite snapshot with sequential file copies; quiesce writes for a cross-store consistent recovery point";
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+  const bytes = Number(manifest.database?.bytes ?? 0) + Number(manifest.repositories?.bytes ?? 0) + Number(manifest.lfs?.bytes ?? 0);
+  let location = outDir;
+  if (destination.kind === "google-drive") {
+    location = remotePath(destination, jobId);
+    for (const command of ["copy", "check"]) {
+      const code = await rclone([command, outDir, location, "--retries", "2", "--contimeout", "15s", "--timeout", "2m"], 60 * 60 * 1000);
+      if (code !== 0) throw new SafeError("Remote transfer or verification failed; the local staging copy was kept");
+    }
+  }
+  const pruned: string[] = [];
+  const candidates: unknown = JSON.parse(process.env.GITGOOD_BACKUP_PRUNE ?? "[]");
+  for (const id of Array.isArray(candidates) ? candidates : []) {
+    if (typeof id !== "string" || !JOB_ID.test(id) || id === jobId) continue;
+    const dir = join(localRoot, id);
+    if (existsSync(join(dir, "manifest.json"))) rmSync(dir, { recursive: true, force: true });
+    if (destination.kind === "google-drive") {
+      const code = await rclone(["purge", remotePath(destination, id), "--contimeout", "15s", "--timeout", "2m"], 10 * 60 * 1000).catch(() => -1);
+      if (code !== 0) continue;
+    }
+    pruned.push(id);
+  }
+  return { bytes, location, pruned };
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (args[0] === "--test") {
+    const destination = destinationFor(args[1] ?? "");
+    process.stdout.write(JSON.stringify(await test(destination)) + "\n");
+    return;
+  }
+  const [destinationId, jobId] = args;
+  if (!jobId || !JOB_ID.test(jobId)) throw new SafeError("Invalid backup job ID");
+  const destination = destinationFor(destinationId ?? "");
+  process.stdout.write(JSON.stringify(await backup(destination, jobId)) + "\n");
+}
+
+try {
+  await main();
+} catch (error) {
+  process.stderr.write(`GITGOOD_ERROR:${safeMessage(error)}\n`);
+  if (!(error instanceof SafeError)) process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.exit(1);
 }

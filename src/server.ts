@@ -1,5 +1,6 @@
 import { failInterruptedRuns } from "./ci/store.ts";
 import { backfillLfsUsage } from "./lfs/usage.ts";
+import { startBackupScheduler } from "./data/backup-jobs.ts";
 import { personalizedShell, shellSessionJson, shellThemeFor, themedShell } from "./web/theme-shell.ts";
 import { config } from "./config.ts";
 import { changes, migrate } from "./db/index.ts";
@@ -371,6 +372,7 @@ export function createServer(port: number = config.port): Bun.Server<unknown> {
     error: (error: Error) => errorResponse(error),
   });
   startDatabaseMaintenance();
+  if (config.env !== "test") startBackupScheduler();
   log.info("gitgood listening", {
     url: `http://${config.host}:${instance.port}`,
     env: config.env,
