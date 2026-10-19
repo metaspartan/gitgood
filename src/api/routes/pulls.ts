@@ -28,6 +28,7 @@ import {
 import { commentJson, commitJson, fileChangeJson, pullJson, pullSummaryJson } from "../serialize.ts";
 import { loadReadableRepo, loadWritableRepo, positiveIntParam } from "../helpers.ts";
 import type { RouteContext, Router } from "../router.ts";
+import { commentsWithReactions } from "./comment-actions.ts";
 
 const createPullSchema = v.strictObject({
   title: v.string({ min: 1, max: 256 }),
@@ -299,7 +300,7 @@ export function registerPullRoutes(router: Router): void {
   router.get("/api/repos/:owner/:name/pulls/:number/comments", (ctx) => {
     const repo = loadReadableRepo(ctx);
     const pull = requirePull(repo.id, pullNumber(ctx));
-    return json({ items: listComments(repo.id, "pull", pull.id).map(commentJson) });
+    return json({ items: commentsWithReactions(listComments(repo.id, "pull", pull.id), ctx.auth) });
   });
 
   router.post("/api/repos/:owner/:name/pulls/:number/comments", async (ctx) => {

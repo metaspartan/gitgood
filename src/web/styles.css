@@ -2043,3 +2043,65 @@ html[data-theme] .settings-nav nav a { color: var(--text); }
   .settings-nav nav a { flex-shrink: 0; white-space: nowrap; }
   .settings-nav nav a.active::before { left: 8px; right: 8px; top: auto; bottom: -2px; width: auto; height: 3px; }
 }
+.comment-thread { display: flex; flex-direction: column; gap: var(--s4); margin-top: var(--s4); }
+.timeline-comments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s4); }
+.timeline-comment-item { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--s3); align-items: start; scroll-margin-top: 80px; }
+.timeline-avatar .avatar { width: 40px; height: 40px; }
+.timeline-comment { position: relative; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.timeline-comment::before, .timeline-comment::after { content: ""; position: absolute; top: 12px; left: -8px; width: 8px; height: 16px; clip-path: polygon(0 50%, 100% 0, 100% 100%); background: var(--border); }
+.timeline-comment::after { left: -6px; background: var(--bg-elevated); }
+.timeline-comment.is-own { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.timeline-comment.is-own::before { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.timeline-comment.is-own .timeline-comment-header, .timeline-comment.is-own::after { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.timeline-comment-header { display: flex; align-items: center; gap: var(--s2); min-height: 40px; padding: 4px 8px 4px var(--s4); font-size: 14px; background: var(--bg-elevated); border-bottom: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; }
+.timeline-comment-meta { min-width: 0; overflow-wrap: anywhere; }
+html[data-theme] a.timeline-author, a.timeline-author { color: var(--text); font-weight: 600; }
+.timeline-role { font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); }
+.timeline-menu { width: 28px; min-height: 28px; padding: 0; color: var(--text-dim); }
+.timeline-comment-body { padding: var(--s4); }
+.timeline-comment-body .markdown-body > :first-child { margin-top: 0; }
+.timeline-comment-body .markdown-body > :last-child { margin-bottom: 0; }
+.timeline-comment-edit { padding: var(--s3); }
+.timeline-signin { margin: 0; padding: var(--s3) var(--s4); border: 1px dashed var(--border); border-radius: var(--radius); text-align: center; }
+.comment-editor { display: flex; flex-direction: column; }
+.comment-editor-tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+.comment-editor-tabs button { min-height: 32px; padding: 0 var(--s3); border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; margin-bottom: -1px; background: transparent; box-shadow: none; color: var(--text-dim); }
+.comment-editor-tabs button.active { background: var(--bg); color: var(--text); border-color: var(--border); font-weight: 600; }
+.comment-editor-body { padding: 8px; }
+.comment-editor-body textarea { width: 100%; min-height: 110px; resize: vertical; }
+.comment-preview { min-height: 110px; padding: 8px; }
+.comment-editor-footer { display: flex; align-items: center; gap: var(--s2); padding: 0 8px 8px; }
+.reaction-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 var(--s4) var(--s3); }
+.reaction-picker-wrap { position: relative; }
+.reaction-add { width: 28px; min-height: 28px; padding: 0; border-radius: 999px; color: var(--text-dim); }
+.reaction-picker { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 60; display: flex; gap: 2px; padding: 6px; background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-lg, 0 12px 32px rgb(0 0 0 / .35)); }
+.reaction-picker button { width: 32px; min-height: 32px; padding: 0; font-size: 16px; border: none; background: transparent; box-shadow: none; border-radius: 6px; }
+.reaction-picker button.is-active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.reaction-pill { min-height: 26px; padding: 0 8px; gap: 4px; font-size: 12px; border-radius: 999px; }
+.reaction-pill .reaction-count { font-weight: 600; color: var(--text-dim); }
+.reaction-pill.is-mine { background: color-mix(in srgb, var(--accent) 14%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.reaction-pill.is-mine .reaction-count { color: var(--link, var(--accent)); }
+.reaction-pill:disabled { opacity: 1; cursor: default; color: var(--text); }
+.contrib { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s5); }
+.contrib-box { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--s3) var(--s4); }
+.contrib-scroll { overflow-x: auto; scrollbar-width: thin; }
+.contrib-grid { width: max-content; max-width: none; border-collapse: separate; border-spacing: 3px; margin: 0 auto; table-layout: fixed; }
+.contrib-grid td { padding: 0; }
+.contrib-month { width: 10px; height: 14px; position: relative; }
+.contrib-month span { position: absolute; left: 0; top: 0; font-size: 11px; line-height: 12px; color: var(--text-dim); white-space: nowrap; }
+.contrib-weekday { width: 28px; font-size: 11px; color: var(--text-dim); line-height: 10px; }
+.contrib-cell { width: 10px; height: 10px; border-radius: 2px; outline: 1px solid color-mix(in srgb, var(--text) 6%, transparent); outline-offset: -1px; }
+.contrib-cell.is-empty { outline: none; }
+.contrib-cell.level-0 { background: var(--bg-inset); }
+.contrib-cell.level-1 { background: color-mix(in srgb, var(--success) 30%, var(--bg-inset)); }
+.contrib-cell.level-2 { background: color-mix(in srgb, var(--success) 55%, var(--bg-inset)); }
+.contrib-cell.level-3 { background: color-mix(in srgb, var(--success) 78%, var(--bg-inset)); }
+.contrib-cell.level-4 { background: var(--success); }
+.contrib-footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.contrib-legend { display: inline-flex; align-items: center; gap: 3px; }
+.contrib-legend .contrib-cell { display: inline-block; }
+@media (max-width: 640px) {
+  .timeline-comment-item { grid-template-columns: minmax(0, 1fr); }
+  .timeline-avatar { display: none; }
+  .timeline-comment::before, .timeline-comment::after { display: none; }
+}

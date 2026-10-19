@@ -43,6 +43,9 @@ import type {
   WebhookDelivery,
   RepoPerson,
   WatchLevel,
+  ReactionContent,
+  ReactionSummary,
+  ContributionCalendar,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -336,6 +339,16 @@ export const api = {
     request<{ items: Comment[] }>(`${encodeRepo(owner, name)}/pulls/${number}/comments`),
   addPullComment: (owner: string, name: string, number: number, body: string) =>
     post<Comment>(`${encodeRepo(owner, name)}/pulls/${number}/comments`, { body }),
+  editComment: (owner: string, name: string, id: number, body: string) =>
+    patch<Comment>(`${encodeRepo(owner, name)}/comments/${id}`, { body }),
+  deleteComment: (owner: string, name: string, id: number) =>
+    request<null>(`${encodeRepo(owner, name)}/comments/${id}`, { method: "DELETE" }),
+  addReaction: (owner: string, name: string, id: number, content: ReactionContent) =>
+    put<{ reactions: ReactionSummary[] }>(`${encodeRepo(owner, name)}/comments/${id}/reactions`, { content }),
+  removeReaction: (owner: string, name: string, id: number, content: ReactionContent) =>
+    del<{ reactions: ReactionSummary[] }>(`${encodeRepo(owner, name)}/comments/${id}/reactions/${encodeURIComponent(content)}`),
+  contributions: (username: string) =>
+    request<ContributionCalendar>(`/api/users/${encodeURIComponent(username)}/contributions?tz=${-new Date().getTimezoneOffset()}`),
 
   webhooks: (owner: string, name: string, signal?: AbortSignal) =>
     request<{ items: Webhook[]; available_events: string[] }>(`${encodeRepo(owner, name)}/webhooks`, { signal }),

@@ -3,12 +3,12 @@ import { api } from "../api.ts";
 import { MilestonePicker } from "./Milestones.tsx";
 import { AssigneeAvatars, AssigneePicker } from "../components/AssigneePicker.tsx";
 import { ThreadTimeline } from "../components/ThreadTimeline.tsx";
-import { Avatar, Badge, EmptyState, ErrorBanner, Markdown, Spinner, timeAgo, useAsync } from "../components.tsx";
+import { Badge, EmptyState, ErrorBanner, Markdown, Spinner, timeAgo, useAsync } from "../components.tsx";
 import { Link, navigate, useLocation } from "../router.tsx";
 import { useSession } from "../App.tsx";
 import { referenceHref } from "../issue-reference.ts";
-import type { Comment } from "../types.ts";
 import { ThreadRow } from "../components/ThreadRow.tsx";
+import { CommentThread } from "../components/CommentThread.tsx";
 
 const STATES = ["open", "closed", "all"] as const;
 
@@ -183,76 +183,6 @@ export function IssueListPage({
   );
 }
 
-function CommentThread({
-  comments,
-  onAdd,
-  canComment,
-  owner,
-  repo,
-}: {
-  comments: Comment[];
-  onAdd: (body: string) => Promise<void>;
-  canComment: boolean;
-  owner: string;
-  repo: string;
-}): ReactNode {
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <div className="card">
-      <h3>Comments</h3>
-      {comments.length === 0 ? <p className="faint small">No comments yet.</p> : null}
-      {comments.map((comment) => (
-        <div key={comment.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
-          <div className="row small muted">
-            {comment.author ? <Avatar user={comment.author} /> : null}
-            <strong>{comment.author?.username ?? "unknown"}</strong>
-            <span className="faint">commented {timeAgo(comment.created_at)}</span>
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <Markdown source={comment.body} resolveReference={(raw) => referenceHref(owner, repo, raw)} />
-          </div>
-        </div>
-      ))}
-
-      {canComment ? (
-        <form
-          className="stack"
-          style={{ marginTop: "var(--s4)", maxWidth: "none" }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            setBusy(true);
-            setError(null);
-            onAdd(body)
-              .then(() => setBody(""))
-              .catch((cause: unknown) =>
-                setError(cause instanceof Error ? cause.message : "Could not post comment"),
-              )
-              .finally(() => setBusy(false));
-          }}
-        >
-          <ErrorBanner message={error} />
-          <label>
-            Add a comment
-            <textarea value={body} onChange={(event) => setBody(event.target.value)} required />
-          </label>
-          <div className="row">
-            <button type="submit" className="primary" disabled={busy || !body.trim()}>
-              Comment
-            </button>
-          </div>
-        </form>
-      ) : (
-        <p className="small muted" style={{ marginTop: 14 }}>
-          <Link to="/login">Sign in</Link> to comment.
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function IssueDetailPage({
   owner,
   repo,
@@ -340,14 +270,13 @@ export function IssueDetailPage({
         repo={repo}
         kind="issue"
         number={number}
-        commentCount={comments.data?.items.length ?? 0}
       />
 
       <CommentThread
         comments={comments.data?.items ?? []}
-        canComment={user !== null}
         owner={owner}
         repo={repo}
+        onChanged={comments.reload}
         onAdd={async (body) => {
           await api.addIssueComment(owner, repo, number, body);
           comments.reload();

@@ -2,7 +2,8 @@ import { json } from "../../lib/http.ts";
 import { notFound } from "../../lib/errors.ts";
 import { all } from "../../db/index.ts";
 import { findUserByUsername, toPublicUser, type UserRow } from "../../auth/service.ts";
-import { canRead, listReposByOwner, statsFromCounts } from "../../data/repos.ts";
+import { canRead, findRepoById, listReposByOwner, statsFromCounts } from "../../data/repos.ts";
+import { contributionCalendar } from "../../data/activity.ts";
 import { listStarredByUser } from "../../data/stars.ts";
 import { repoJson, userJson } from "../serialize.ts";
 import { param } from "../helpers.ts";
@@ -36,6 +37,18 @@ export function registerUserRoutes(router: Router): void {
     if (!row) throw notFound("User not found");
     const repos = listReposByOwner(row.id).filter((repo) => canRead(repo, ctx.auth));
     return json({ items: repos.map((repo) => ({ ...repoJson(repo), ...statsFromCounts(repo) })) });
+  });
+
+  router.get("/api/users/:username/contributions", (ctx) => {
+    const row = findUserByUsername(param(ctx, "username"));
+    if (!row) throw notFound("User not found");
+    const tz = Number.parseInt(ctx.url.searchParams.get("tz") ?? "0", 10);
+    const offset = Number.isFinite(tz) ? Math.max(-840, Math.min(840, tz)) : 0;
+    const calendar = contributionCalendar(row.id, (repoId) => {
+      const repo = findRepoById(repoId);
+      return repo !== null && canRead(repo, ctx.auth);
+    }, offset);
+    return json(calendar, { headers: { "cache-control": "private, max-age=60" } });
   });
 
   router.get("/api/users/:username/starred", (ctx) => {

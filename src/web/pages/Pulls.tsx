@@ -4,13 +4,13 @@ import { api } from "../api.ts";
 import { MilestonePicker } from "./Milestones.tsx";
 import { AssigneeAvatars, AssigneePicker } from "../components/AssigneePicker.tsx";
 import { ThreadTimeline } from "../components/ThreadTimeline.tsx";
-import { Avatar, Badge, EmptyState, ErrorBanner, Markdown, Spinner, timeAgo, useAsync } from "../components.tsx";
+import { Badge, EmptyState, ErrorBanner, Markdown, Spinner, timeAgo, useAsync } from "../components.tsx";
 import { Link, navigate } from "../router.tsx";
 import { useSession } from "../App.tsx";
 import { referenceHref } from "../issue-reference.ts";
 import { hasMoreFileRows, visibleFileRows } from "../pr-file-list.ts";
-import type { Comment } from "../types.ts";
 import { ThreadRow } from "../components/ThreadRow.tsx";
+import { CommentThread } from "../components/CommentThread.tsx";
 
 const STATES = ["open", "closed", "merged", "all"] as const;
 
@@ -177,7 +177,6 @@ export function PullDetailPage({
   const comments = useAsync(() => api.pullComments(owner, repo, number), [owner, repo, number]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [commentBody, setCommentBody] = useState("");
   const [filePages, setFilePages] = useState(1);
 
   if (pull.loading) return <Spinner label="Loading pull request" />;
@@ -306,53 +305,18 @@ export function PullDetailPage({
         repo={repo}
         kind="pull"
         number={number}
-        commentCount={comments.data?.items.length ?? 0}
       />
 
-      <div className="card">
-        <h3>Conversation</h3>
-        {(comments.data?.items ?? []).length === 0 ? <p className="faint small">No comments yet.</p> : null}
-        {(comments.data?.items ?? []).map((comment: Comment) => (
-          <div key={comment.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
-            <div className="row small muted">
-              {comment.author ? <Avatar user={comment.author} /> : null}
-              <strong>{comment.author?.username ?? "unknown"}</strong>
-              <span className="faint">{timeAgo(comment.created_at)}</span>
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <Markdown source={comment.body} resolveReference={(raw) => referenceHref(owner, repo, raw)} />
-            </div>
-          </div>
-        ))}
-        {user ? (
-          <form
-            className="stack"
-            style={{ marginTop: "var(--s4)", maxWidth: "none" }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void api
-                .addPullComment(owner, repo, number, commentBody)
-                .then(() => {
-                  setCommentBody("");
-                  comments.reload();
-                })
-                .catch((cause: unknown) =>
-                  setError(cause instanceof Error ? cause.message : "Could not post comment"),
-                );
-            }}
-          >
-            <label>
-              Add a comment
-              <textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} required />
-            </label>
-            <div className="row">
-              <button type="submit" className="primary" disabled={!commentBody.trim()}>
-                Comment
-              </button>
-            </div>
-          </form>
-        ) : null}
-      </div>
+      <CommentThread
+        comments={comments.data?.items ?? []}
+        owner={owner}
+        repo={repo}
+        onChanged={comments.reload}
+        onAdd={async (body) => {
+          await api.addPullComment(owner, repo, number, body);
+          comments.reload();
+        }}
+      />
     </>
   );
 }

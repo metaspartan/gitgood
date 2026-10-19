@@ -24,12 +24,14 @@ import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerBranchProtectionRoutes } from "./routes/branch-protection.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
 import { registerRunnerRoutes } from "./routes/runners.ts";
+import { registerCommentActionRoutes } from "./routes/comment-actions.ts";
 
 export function buildRouter(): Router {
   const router = new Router();
   registerBackupRoutes(router);
   registerAdminRoutes(router);
   registerRunnerRoutes(router);
+  registerCommentActionRoutes(router);
   registerStorageRoutes(router);
   registerSystemRoutes(router);
   registerOrgRoutes(router);

@@ -11,6 +11,7 @@ export interface CommentRow {
   author_id: number;
   body: string;
   created_at: number;
+  updated_at?: number | null;
 }
 
 export interface CommentWithAuthor extends CommentRow {
@@ -56,6 +57,18 @@ export function listComments(
     targetType,
     targetId,
   );
+}
+
+export function findComment(repoId: number, commentId: number): CommentWithAuthor | null {
+  return one<CommentWithAuthor>(`${SELECT_COMMENT} WHERE c.id = ? AND c.repo_id = ?`, commentId, repoId);
+}
+
+export function updateComment(commentId: number, body: string): void {
+  changes("UPDATE comments SET body = ?, updated_at = ? WHERE id = ?", body.trim(), now(), commentId);
+}
+
+export function removeComment(commentId: number): boolean {
+  return changes("DELETE FROM comments WHERE id = ?", commentId) > 0;
 }
 
 export function countComments(targetType: CommentTarget, targetId: number): number {

@@ -38,7 +38,7 @@ Reproduce: `docker run -d --tmpfs /data:uid=1000,gid=1000 -e GITGOOD_DATA_DIR=/d
 | Image diffs, including LFS images | ✅ | ✅ | ✅ | ✅ |
 | Admin area: users, block, roles, sign-out, 2FA reset, runners, settings, audit log, backups | ✅ | Enterprise | ✅ | ✅ |
 | Account security: TOTP, passkeys, scoped tokens, active session management | ✅ | ✅ | ✅ | ✅ |
-| Themes | 33 incl. GitHub 1:1, per-user "sync with system" | ✅ | ✅ | ✅ |
+| Themes | 38 incl. GitHub 1:1, per-user "sync with system" | ✅ | ✅ | ✅ |
 | Production dependencies | 3 npm packages (react, react-dom, three), 0 known vulnerabilities (OSV) | n/a | hundreds | Go modules |
 
 ¹ [GitLab installation requirements](https://docs.gitlab.com/install/requirements/) · ² [Running GitLab in a memory-constrained environment](https://docs.gitlab.com/omnibus/settings/memory_constrained_envs/)
@@ -117,7 +117,7 @@ Each job runs in a fresh container (memory, CPU and PID limits, `no-new-privileg
 
 - **Code**: file browser with latest-commit bar, "Go to file" fuzzy finder (`t`), blame, raw/archive downloads, syntax highlighting, virtualized large-file viewer, Markdown READMEs, image/audio/video/3D previews, in-browser editing.
 - **History**: commits grouped by day with expandable descriptions, commit pages with per-file menus, image and 3D diffs, branch compare.
-- **Collaboration**: issues and pull requests with reviews, required checks, merge policies, labels, milestones, assignees, event timelines, notifications, mentions, stars, watches and forks.
+- **Collaboration**: issues and pull requests with reviews, comment editing and emoji reactions, contribution graphs on profiles, required checks, merge policies, labels, milestones, assignees, event timelines, notifications, mentions, stars, watches and forks.
 - **Organizations** with owner/admin/member roles and per-repository collaborators.
 - **Git LFS** (batch API, locks) with deduplicated storage and per-repository usage.
 - **Webhooks** with SSRF protection, delivery history and retries.

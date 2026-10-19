@@ -88,6 +88,25 @@ export function migrate(): void {
   db.exec(require("node:fs").readFileSync(new URL("./migrations/009_runners_admin.sql", import.meta.url), "utf8"));
   addColumnIfMissing("users", "blocked_at", "INTEGER");
   addColumnIfMissing("sessions", "ip", "TEXT");
+  addColumnIfMissing("comments", "updated_at", "INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS reactions (
+    comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (comment_id, user_id, content)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS push_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    commits INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_push_events_user ON push_events(user_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_issues_author ON issues(author_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_pulls_author ON pulls(author_id, created_at)");
   addColumnIfMissing("sessions", "user_agent", "TEXT");
   addColumnIfMissing("sessions", "last_seen_at", "INTEGER");
   db.exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (

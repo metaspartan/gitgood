@@ -5,6 +5,7 @@ import { useSession } from "../App.tsx";
 import { Avatar, EmptyState, ErrorBanner, timeAgo, useAsync } from "../components.tsx";
 import { Icon } from "../components/Icons.tsx";
 import { compactCount } from "../components/RepoSocialActions.tsx";
+import { ContributionGraph } from "../components/ContributionGraph.tsx";
 import { Link, navigate, useLocation } from "../router.tsx";
 import type { Repo } from "../types.ts";
 
@@ -220,6 +221,7 @@ export function UserPage({ username }: { username: string }): ReactNode {
                   {popularRepos(repos.data?.items ?? []).map((repo) => <PinnedCard key={repo.id} repo={repo} />)}
                 </ul>
               )}
+              <ContributionGraph username={username} />
             </>
           ) : tab === "repositories" ? (
             <RepoBrowser repos={repos.data?.items} loading={repos.loading} emptyTitle="No repositories" showOwner={false} />

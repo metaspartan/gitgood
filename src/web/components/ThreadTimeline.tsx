@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { api } from "../api.ts";
 import { useAsync } from "../components.tsx";
-import { EmptyState, ErrorBanner, timeAgo } from "../components.tsx";
+import { ErrorBanner, timeAgo } from "../components.tsx";
 import type { ThreadEvent } from "../types.ts";
 import "./ThreadTimeline.css";
 
@@ -58,13 +58,11 @@ export function ThreadTimeline({
   repo,
   kind,
   number,
-  commentCount,
 }: {
   owner: string;
   repo: string;
   kind: "issue" | "pull";
   number: number;
-  commentCount: number;
 }): ReactNode {
   const events = useAsync(() => api.threadEvents(owner, repo, kind, number), [owner, repo, kind, number]);
   const [showAll, setShowAll] = useState(false);
@@ -73,7 +71,7 @@ export function ThreadTimeline({
   const hidden = Math.max(0, items.length - 5);
   const visible = showAll ? items : items.slice(hidden);
 
-  if (!events.loading && items.length === 0 && commentCount === 0) {
+  if (!events.loading && items.length === 0) {
     return null;
   }
 
@@ -118,9 +116,6 @@ export function ThreadTimeline({
           );
         })}
       </ol>
-      {items.length === 0 && !events.loading && commentCount > 0 ? (
-        <EmptyState title="No activity yet" hint="Closing this or adding a label will show up here." />
-      ) : null}
       {showAll && items.length > 5 ? (
         <button type="button" className="ghost small" onClick={() => setShowAll(false)}>
           Show less

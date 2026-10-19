@@ -32,6 +32,7 @@ import { touchRepository } from "../../data/repos.ts";
 import { commentJson, issueJson, issueSummaryJson } from "../serialize.ts";
 import { loadReadableRepo, loadWritableRepo, positiveIntParam } from "../helpers.ts";
 import type { RouteContext, Router } from "../router.ts";
+import { commentsWithReactions } from "./comment-actions.ts";
 
 const createIssueSchema = v.strictObject({
   title: v.string({ min: 1, max: 256 }),
@@ -204,7 +205,7 @@ export function registerIssueRoutes(router: Router): void {
   router.get("/api/repos/:owner/:name/issues/:number/comments", (ctx) => {
     const repo = loadReadableRepo(ctx);
     const issue = requireIssue(repo.id, issueNumber(ctx));
-    return json({ items: listComments(repo.id, "issue", issue.id).map(commentJson) });
+    return json({ items: commentsWithReactions(listComments(repo.id, "issue", issue.id), ctx.auth) });
   });
 
   router.post("/api/repos/:owner/:name/issues/:number/comments", async (ctx) => {

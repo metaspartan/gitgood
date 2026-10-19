@@ -208,7 +208,23 @@ export interface Comment {
   id: number;
   body: string;
   created_at: number;
+  updated_at?: number | null;
   author?: User;
+  reactions?: ReactionSummary[];
+}
+
+export type ReactionContent = "+1" | "-1" | "laugh" | "hooray" | "confused" | "heart" | "rocket" | "eyes";
+
+export interface ReactionSummary {
+  content: ReactionContent;
+  count: number;
+  me: boolean;
+}
+
+export interface ContributionCalendar {
+  total: number;
+  breakdown: { commits: number; issues: number; pulls: number; comments: number };
+  days: { date: string; count: number }[];
 }
 
 export interface Envelope<T> {

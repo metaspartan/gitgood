@@ -254,6 +254,7 @@ export function commentJson(comment: CommentRow | CommentWithAuthor): Record<str
     id: comment.id,
     body: comment.body,
     created_at: comment.created_at,
+    updated_at: comment.updated_at ?? null,
   };
   if ("author_username" in comment) {
     base.author = {
