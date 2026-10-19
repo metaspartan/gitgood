@@ -38,7 +38,7 @@ Reproduce: `docker run -d --tmpfs /data:uid=1000,gid=1000 -e GITGOOD_DATA_DIR=/d
 | Image diffs, including LFS images | ✅ | ✅ | ✅ | ✅ |
 | Admin area: users, block, roles, sign-out, 2FA reset, runners, settings, audit log, backups | ✅ | Enterprise | ✅ | ✅ |
 | Account security: TOTP, passkeys, scoped tokens, active session management | ✅ | ✅ | ✅ | ✅ |
-| Themes | 28 incl. GitHub 1:1, per-user "sync with system" | ✅ | ✅ | ✅ |
+| Themes | 33 incl. GitHub 1:1, per-user "sync with system" | ✅ | ✅ | ✅ |
 | Production dependencies | 3 npm packages (react, react-dom, three), 0 known vulnerabilities (OSV) | n/a | hundreds | Go modules |
 
 ¹ [GitLab installation requirements](https://docs.gitlab.com/install/requirements/) · ² [Running GitLab in a memory-constrained environment](https://docs.gitlab.com/omnibus/settings/memory_constrained_envs/)
@@ -180,4 +180,4 @@ Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.m
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © Carsen Klock

@@ -3,13 +3,15 @@ import "./SettingsTokens.css";
 import { api } from "../api.ts";
 import { ErrorBanner, Notice, Spinner, timeAgo, useAsync } from "../components.tsx";
 import { useSession } from "../App.tsx";
-import { Link } from "../router.tsx";
+import { Link, useLocation } from "../router.tsx";
+import { SettingsNav, SshKeysPanel, settingsSectionFrom } from "../components/SettingsShell.tsx";
 import type { PasskeyChallenge } from "../types.ts";
 import { PersonalAppearance } from "../components/PersonalAppearance.tsx";
 import { SessionsPanel } from "../components/SessionsPanel.tsx";
 
 export function SettingsPage(): ReactNode {
   const { user, refresh } = useSession();
+  const section = settingsSectionFrom(useLocation());
   const account = useAsync(() => (user ? api.accountSettings() : Promise.resolve(null)), [user?.id ?? 0]);
   const mfa = useAsync(() => (user ? api.mfaState() : Promise.resolve(null)), [user?.id ?? 0]);
   const tokens = useAsync(() => (user ? api.tokens() : Promise.resolve({ items: [] })), [user?.id ?? 0]);
@@ -199,7 +201,9 @@ export function SettingsPage(): ReactNode {
     });
 
   return (
-    <>
+    <div className="settings-layout">
+      <SettingsNav section={section} user={user} />
+      <div className="settings-main">
       {account.data?.instance_bootstrap_pending ? (
         <Notice>
           <strong>This instance still uses its generated administrator credentials.</strong> Change the
@@ -210,10 +214,16 @@ export function SettingsPage(): ReactNode {
       <ErrorBanner message={error} />
       {notice ? <Notice>{notice}</Notice> : null}
 
+      {section === "appearance" ? (
+        <>
       <PersonalAppearance />
+        </>
+      ) : null}
 
+      {section === "profile" ? (
+        <>
       <div className="card">
-        <h2 style={{ marginTop: 0 }}>Account</h2>
+        <h2 style={{ marginTop: 0 }}>Public profile</h2>
         <p className="muted small">
           Your username is part of every clone URL you have shared, so changing it moves your
           repositories to a new URL.
@@ -263,7 +273,11 @@ export function SettingsPage(): ReactNode {
           </div>
         </form>
       </div>
+        </>
+      ) : null}
 
+      {section === "security" ? (
+        <>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Password</h3>
         <p className="muted small">
@@ -481,9 +495,17 @@ export function SettingsPage(): ReactNode {
           </button>
         </form>
       </div>
+        </>
+      ) : null}
 
+      {section === "sessions" ? (
+        <>
       <SessionsPanel />
+        </>
+      ) : null}
 
+      {section === "tokens" ? (
+        <>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Personal access tokens</h3>
         <p className="muted small">
@@ -591,7 +613,11 @@ export function SettingsPage(): ReactNode {
           </table>
         )}
       </div>
-    </>
+        </>
+      ) : null}
+      {section === "keys" ? <SshKeysPanel /> : null}
+      </div>
+    </div>
   );
 }
 
