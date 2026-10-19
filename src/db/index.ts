@@ -96,14 +96,20 @@ export function migrate(): void {
     created_at INTEGER NOT NULL,
     PRIMARY KEY (comment_id, user_id, content)
   )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS push_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  db.exec("DROP TABLE IF EXISTS push_events");
+  for (const column of ["bio", "company", "location", "website"]) addColumnIfMissing("users", column, "TEXT NOT NULL DEFAULT ''");
+  db.exec(`CREATE TABLE IF NOT EXISTS user_emails (
+    email TEXT PRIMARY KEY COLLATE NOCASE,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    commits INTEGER NOT NULL,
     created_at INTEGER NOT NULL
   )`);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_push_events_user ON push_events(user_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_user_emails_user ON user_emails(user_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS user_pins (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    PRIMARY KEY (user_id, repo_id)
+  )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_comments_author ON comments(author_id, created_at)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_issues_author ON issues(author_id, created_at)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_pulls_author ON pulls(author_id, created_at)");

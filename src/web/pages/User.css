@@ -76,7 +76,7 @@ html[data-theme] a.profile-repo-name:hover, a.profile-repo-name:hover { text-dec
   .profile-names { margin: 0; }
   .profile-display-name { font-size: 20px; }
   .profile-username { font-size: 16px; }
-  .profile-edit, .profile-facts { grid-column: 1 / -1; }
+  .profile-edit, .profile-facts, .profile-bio, .profile-edit-form { grid-column: 1 / -1; }
   .pinned-grid { grid-template-columns: minmax(0, 1fr); }
   .profile-repo { padding: var(--s4) 0; }
   html[data-theme] a.profile-repo-name, a.profile-repo-name { font-size: 17px; }

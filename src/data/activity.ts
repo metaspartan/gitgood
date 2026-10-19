@@ -1,31 +1,12 @@
-import { all, now, run } from "../db/index.ts";
-import { gitStdout } from "../git/run.ts";
+import { all, one } from "../db/index.ts";
+import { cached } from "../lib/cache.ts";
+import { git } from "../git/run.ts";
+import { repoDiskPath, type RepoRecord } from "./repos.ts";
 
-const SHA = /^[0-9a-f]{40,64}$/;
 const DAY_MS = 86_400_000;
-export const CONTRIBUTION_DAYS = 371;
-
-export async function countPushedCommits(
-  repoPath: string,
-  before: ReadonlyMap<string, string>,
-  after: ReadonlyMap<string, string>,
-): Promise<number> {
-  const tips = [...new Set([...after.values()])].filter((sha) => SHA.test(sha) && ![...before.values()].includes(sha));
-  if (tips.length === 0) return 0;
-  const exclude = [...new Set(before.values())].filter((sha) => SHA.test(sha)).map((sha) => `^${sha}`);
-  const output = await gitStdout(["rev-list", "--count", "--max-count=100000", "--stdin"], {
-    cwd: repoPath,
-    input: `${[...tips, ...exclude].join("\n")}\n`,
-    timeoutMs: 30_000,
-  });
-  const count = Number.parseInt(output.trim(), 10);
-  return Number.isFinite(count) ? count : 0;
-}
-
-export function recordPush(repoId: number, userId: number, commits: number): void {
-  if (commits <= 0) return;
-  run("INSERT INTO push_events (repo_id, user_id, commits, created_at) VALUES (?, ?, ?, ?)", repoId, userId, commits, now());
-}
+const MAX_COMMITS_PER_REPO = 50_000;
+const MAX_REPOS_SCANNED = 300;
+const COMMIT_CACHE_MS = 3_600_000;
 
 export interface ContributionDay {
   date: string;
@@ -37,45 +18,174 @@ export interface ContributionBreakdown {
   issues: number;
   pulls: number;
   comments: number;
+  repositories: number;
+}
+
+export interface MonthActivity {
+  month: string;
+  commits: { repo: string; count: number }[];
+  repositories: { repo: string; created_at: number }[];
+  issues: { repo: string; count: number }[];
+  pulls: { repo: string; count: number }[];
+}
+
+export interface ContributionReport {
+  year: number | null;
+  years: number[];
+  from: string;
+  to: string;
+  days: ContributionDay[];
+  total: number;
+  breakdown: ContributionBreakdown;
+  months: MonthActivity[];
+  joined_at: number;
 }
 
 export function dayKey(timestamp: number, offsetMinutes: number): string {
   return new Date(timestamp + offsetMinutes * 60_000).toISOString().slice(0, 10);
 }
 
-export function contributionCalendar(
-  userId: number,
-  canReadRepo: (repoId: number) => boolean,
-  offsetMinutes: number,
-  at = now(),
-): { days: ContributionDay[]; total: number; breakdown: ContributionBreakdown } {
-  const since = at - CONTRIBUTION_DAYS * DAY_MS;
-  const rows = all<{ kind: keyof ContributionBreakdown; repo_id: number; created_at: number; weight: number }>(
-    `SELECT 'commits' AS kind, repo_id, created_at, commits AS weight FROM push_events WHERE user_id = ? AND created_at >= ?
-     UNION ALL SELECT 'issues', repo_id, created_at, 1 FROM issues WHERE author_id = ? AND created_at >= ?
-     UNION ALL SELECT 'pulls', repo_id, created_at, 1 FROM pulls WHERE author_id = ? AND created_at >= ?
-     UNION ALL SELECT 'comments', repo_id, created_at, 1 FROM comments WHERE author_id = ? AND created_at >= ?`,
-    userId, since, userId, since, userId, since, userId, since,
-  );
-  const readable = new Map<number, boolean>();
-  const counts = new Map<string, number>();
-  const breakdown: ContributionBreakdown = { commits: 0, issues: 0, pulls: 0, comments: 0 };
-  for (const row of rows) {
-    let ok = readable.get(row.repo_id);
-    if (ok === undefined) {
-      ok = canReadRepo(row.repo_id);
-      readable.set(row.repo_id, ok);
+function utcDay(key: string): number {
+  return Date.parse(`${key}T00:00:00Z`);
+}
+
+function addDays(key: string, days: number): string {
+  return new Date(utcDay(key) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+export function reportRange(year: number | null, offsetMinutes: number, at: number): { from: string; to: string } {
+  if (year !== null) return { from: `${year}-01-01`, to: `${year}-12-31` };
+  const today = dayKey(at, offsetMinutes);
+  const weekday = new Date(utcDay(today)).getUTCDay();
+  return { from: addDays(today, -weekday - 52 * 7), to: today };
+}
+
+export async function authoredCommitTimes(repo: RepoRecord, emails: readonly string[]): Promise<number[]> {
+  if (emails.length === 0) return [];
+  const normalized = [...new Set(emails.map((email) => email.toLowerCase()))].sort();
+  const key = `activity:${repo.id}:${repo.updated_at}:${normalized.join(",")}`;
+  return cached(key, COMMIT_CACHE_MS, async () => {
+    try {
+      const result = await git(
+        ["log", "--all", "--fixed-strings", "--regexp-ignore-case", ...normalized.map((email) => `--author=<${email}>`), `--max-count=${MAX_COMMITS_PER_REPO}`, "--format=%at"],
+        { cwd: repoDiskPath(repo), timeoutMs: 30_000 },
+      );
+      if (result.exitCode !== 0) return [];
+      return result.stdout.split("\n").map((line) => Number(line) * 1000).filter((value) => Number.isFinite(value) && value > 0);
+    } catch {
+      return [];
     }
-    if (!ok) continue;
-    const key = dayKey(row.created_at, offsetMinutes);
-    counts.set(key, (counts.get(key) ?? 0) + row.weight);
-    breakdown[row.kind] += row.weight;
+  });
+}
+
+export function contributedRepoIds(userId: number): number[] {
+  return all<{ id: number }>(
+    `SELECT r.id FROM repos r
+      WHERE r.fork_of IS NULL AND (
+        (r.owner_id = ? AND r.org_id IS NULL)
+        OR r.id IN (SELECT repo_id FROM repo_collaborators WHERE user_id = ?)
+        OR r.org_id IN (SELECT org_id FROM org_members WHERE user_id = ?)
+      )
+      ORDER BY r.updated_at DESC
+      LIMIT ?`,
+    userId,
+    userId,
+    userId,
+    MAX_REPOS_SCANNED,
+  ).map((row) => row.id);
+}
+
+interface ActivityEvent {
+  kind: "commits" | "issues" | "pulls" | "comments" | "repositories";
+  repo: string;
+  at: number;
+}
+
+export interface ActivityInput {
+  user: { id: number; created_at: number };
+  emails: readonly string[];
+  repos: RepoRecord[];
+  year: number | null;
+  offsetMinutes: number;
+  at: number;
+}
+
+export async function contributionReport(input: ActivityInput): Promise<ContributionReport> {
+  const { user, emails, repos, year, offsetMinutes, at } = input;
+  const byId = new Map(repos.map((repo) => [repo.id, repo]));
+  const fullName = (repo: RepoRecord) => `${repo.owner_username}/${repo.name}`;
+  const events: ActivityEvent[] = [];
+
+  const commitLists = await Promise.all(repos.map(async (repo) => ({ repo, times: await authoredCommitTimes(repo, emails) })));
+  for (const { repo, times } of commitLists) for (const time of times) events.push({ kind: "commits", repo: fullName(repo), at: time });
+
+  const ids = [...byId.keys()];
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = all<{ kind: ActivityEvent["kind"]; repo_id: number; created_at: number }>(
+      `SELECT 'issues' AS kind, repo_id, created_at FROM issues WHERE author_id = ? AND repo_id IN (${placeholders})
+       UNION ALL SELECT 'pulls', repo_id, created_at FROM pulls WHERE author_id = ? AND repo_id IN (${placeholders})
+       UNION ALL SELECT 'comments', repo_id, created_at FROM comments WHERE author_id = ? AND repo_id IN (${placeholders})`,
+      user.id, ...ids, user.id, ...ids, user.id, ...ids,
+    );
+    for (const row of rows) events.push({ kind: row.kind, repo: fullName(byId.get(row.repo_id)!), at: row.created_at });
   }
+  for (const repo of repos) {
+    if (repo.owner_id === user.id && repo.org_id === null) events.push({ kind: "repositories", repo: fullName(repo), at: repo.created_at });
+  }
+
+  const currentYear = Number(dayKey(at, offsetMinutes).slice(0, 4));
+  let earliestYear = Number(dayKey(user.created_at, offsetMinutes).slice(0, 4));
+  for (const event of events) earliestYear = Math.min(earliestYear, Number(dayKey(event.at, offsetMinutes).slice(0, 4)));
+  earliestYear = Math.max(earliestYear, currentYear - 30);
+  const years: number[] = [];
+  for (let y = currentYear; y >= earliestYear; y -= 1) years.push(y);
+
+  const { from, to } = reportRange(year, offsetMinutes, at);
+  const counts = new Map<string, number>();
+  const breakdown: ContributionBreakdown = { commits: 0, issues: 0, pulls: 0, comments: 0, repositories: 0 };
+  const months = new Map<string, { commits: Map<string, number>; repositories: { repo: string; created_at: number }[]; issues: Map<string, number>; pulls: Map<string, number> }>();
+  for (const event of events) {
+    const key = dayKey(event.at, offsetMinutes);
+    if (key < from || key > to) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    breakdown[event.kind] += 1;
+    if (event.kind === "comments") continue;
+    const month = key.slice(0, 7);
+    let bucket = months.get(month);
+    if (!bucket) {
+      bucket = { commits: new Map(), repositories: [], issues: new Map(), pulls: new Map() };
+      months.set(month, bucket);
+    }
+    if (event.kind === "repositories") bucket.repositories.push({ repo: event.repo, created_at: event.at });
+    else bucket[event.kind].set(event.repo, (bucket[event.kind].get(event.repo) ?? 0) + 1);
+  }
+
   const days: ContributionDay[] = [];
-  for (let i = CONTRIBUTION_DAYS - 1; i >= 0; i -= 1) {
-    const key = dayKey(at - i * DAY_MS, offsetMinutes);
-    days.push({ date: key, count: counts.get(key) ?? 0 });
-  }
-  const total = breakdown.commits + breakdown.issues + breakdown.pulls + breakdown.comments;
-  return { days, total, breakdown };
+  for (let key = from; key <= to; key = addDays(key, 1)) days.push({ date: key, count: counts.get(key) ?? 0 });
+  const sorted = (map: Map<string, number>) => [...map].map(([repo, count]) => ({ repo, count })).sort((a, b) => b.count - a.count || a.repo.localeCompare(b.repo));
+
+  return {
+    year,
+    years,
+    from,
+    to,
+    days,
+    total: breakdown.commits + breakdown.issues + breakdown.pulls + breakdown.comments + breakdown.repositories,
+    breakdown,
+    months: [...months]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([month, bucket]) => ({
+        month,
+        commits: sorted(bucket.commits),
+        repositories: bucket.repositories.sort((a, b) => b.created_at - a.created_at),
+        issues: sorted(bucket.issues),
+        pulls: sorted(bucket.pulls),
+      })),
+    joined_at: user.created_at,
+  };
+}
+
+export function profileReadmeRepo(userId: number, username: string): number | null {
+  return one<{ id: number }>("SELECT id FROM repos WHERE owner_id = ? AND org_id IS NULL AND fork_of IS NULL AND name = ? COLLATE NOCASE", userId, username)?.id ?? null;
 }

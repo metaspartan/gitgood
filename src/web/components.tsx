@@ -3,17 +3,44 @@ import { renderMarkdown } from "./markdown.tsx";
 import "./components/Markdown.css";
 import type { User } from "./types.ts";
 
+export function identiconCells(seed: string): boolean[] {
+  let hash = 0x811c9dc5;
+  for (const char of seed.toLowerCase()) {
+    hash ^= char.codePointAt(0)!;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const cells: boolean[] = [];
+  for (let row = 0; row < 5; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      const mirrored = col < 3 ? col : 4 - col;
+      cells.push(((hash >>> (row * 3 + mirrored)) & 1) === 1);
+    }
+  }
+  if (!cells.some(Boolean)) cells[12] = true;
+  return cells;
+}
+
+const identiconCache = new Map<string, ReactNode>();
+
+function Identicon({ username, hue }: { username: string; hue: number }): ReactNode {
+  const key = `${username.toLowerCase()}:${hue}`;
+  const cached = identiconCache.get(key);
+  if (cached) return cached;
+  const cells = identiconCells(username);
+  const svg = (
+    <svg viewBox="-0.6 -0.6 6.2 6.2" shapeRendering="crispEdges" aria-hidden="true" focusable="false">
+      {cells.map((on, index) => (on ? <rect key={index} x={index % 5} y={Math.floor(index / 5)} width="1.02" height="1.02" fill={`hsl(${hue} 52% 54%)`} /> : null))}
+    </svg>
+  );
+  if (identiconCache.size > 500) identiconCache.clear();
+  identiconCache.set(key, svg);
+  return svg;
+}
+
 export function Avatar({ user, size = "sm" }: { user: Pick<User, "username" | "display_name" | "avatar_hue">; size?: "sm" | "lg" | "xl" }): ReactNode {
-  const initials = user.display_name.slice(0, 2);
-  const background = `hsl(${user.avatar_hue} 72% 62%)`;
   return (
-    <span
-      className={`avatar${size === "sm" ? "" : ` ${size}`}`}
-      style={{ background }}
-      title={user.username}
-      aria-hidden="true"
-    >
-      {initials}
+    <span className={`avatar identicon${size === "sm" ? "" : ` ${size}`}`} title={user.username} aria-hidden="true">
+      <Identicon username={user.username} hue={user.avatar_hue} />
     </span>
   );
 }

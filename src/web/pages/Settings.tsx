@@ -4,7 +4,7 @@ import { api } from "../api.ts";
 import { ErrorBanner, Notice, Spinner, timeAgo, useAsync } from "../components.tsx";
 import { useSession } from "../App.tsx";
 import { Link, useLocation } from "../router.tsx";
-import { SettingsNav, SshKeysPanel, settingsSectionFrom } from "../components/SettingsShell.tsx";
+import { CommitEmailsPanel, SettingsNav, SshKeysPanel, settingsSectionFrom } from "../components/SettingsShell.tsx";
 import type { PasskeyChallenge } from "../types.ts";
 import { PersonalAppearance } from "../components/PersonalAppearance.tsx";
 import { SessionsPanel } from "../components/SessionsPanel.tsx";
@@ -22,6 +22,7 @@ export function SettingsPage(): ReactNode {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [profileFields, setProfileFields] = useState({ bio: "", company: "", location: "", website: "" });
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -45,6 +46,8 @@ export function SettingsPage(): ReactNode {
       setUsername(account.data.user.username);
       setEmail(account.data.user.email ?? "");
       setDisplayName(account.data.user.display_name);
+      const fields = account.data.user;
+      setProfileFields({ bio: fields.bio ?? "", company: fields.company ?? "", location: fields.location ?? "", website: fields.website ?? "" });
     }
   }, [account.data]);
 
@@ -78,6 +81,7 @@ export function SettingsPage(): ReactNode {
           username: username.trim(),
           email: email.trim(),
           display_name: displayName.trim(),
+          ...profileFields,
         });
         account.reload();
         refresh();
@@ -265,6 +269,30 @@ export function SettingsPage(): ReactNode {
               autoComplete="name"
             />
           </label>
+          <label>
+            Bio
+            <textarea
+              name="bio"
+              rows={3}
+              maxLength={160}
+              value={profileFields.bio}
+              placeholder="Tell us a little bit about yourself"
+              onChange={(event) => setProfileFields({ ...profileFields, bio: event.target.value })}
+            />
+            <span className="small faint">{160 - profileFields.bio.length} characters left</span>
+          </label>
+          <label>
+            Company
+            <input name="company" maxLength={100} value={profileFields.company} onChange={(event) => setProfileFields({ ...profileFields, company: event.target.value })} autoComplete="organization" />
+          </label>
+          <label>
+            Location
+            <input name="location" maxLength={100} value={profileFields.location} onChange={(event) => setProfileFields({ ...profileFields, location: event.target.value })} />
+          </label>
+          <label>
+            Website
+            <input name="website" type="text" inputMode="url" maxLength={200} value={profileFields.website} placeholder="https://" onChange={(event) => setProfileFields({ ...profileFields, website: event.target.value })} autoComplete="url" />
+          </label>
           <div className="row">
             <button type="submit" className="primary" disabled={savingProfile}>
               {savingProfile ? "Saving…" : "Save profile"}
@@ -276,6 +304,7 @@ export function SettingsPage(): ReactNode {
         </>
       ) : null}
 
+      {section === "profile" ? <CommitEmailsPanel /> : null}
       {section === "security" ? (
         <>
       <div className="card">

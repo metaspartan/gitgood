@@ -1,6 +1,5 @@
 import { failInterruptedRuns } from "./ci/store.ts";
 import { backfillLfsUsage } from "./lfs/usage.ts";
-import { countPushedCommits, recordPush } from "./data/activity.ts";
 import { personalizedShell, shellSessionJson, shellThemeFor, themedShell } from "./web/theme-shell.ts";
 import { config } from "./config.ts";
 import { changes, migrate } from "./db/index.ts";
@@ -161,13 +160,6 @@ async function handleReceivePack(
     });
 
     const pusher = auth.kind === "user" ? auth : null;
-    if (pusher) {
-      try {
-        recordPush(repo.id, pusher.userId, await countPushedCommits(path, before.refs, after.refs));
-      } catch (error) {
-        log.warn("push activity not recorded", { error: error instanceof Error ? error.message : String(error) });
-      }
-    }
     try {
       notifyPush(repo, pusher, changes.length);
     } catch (error) {

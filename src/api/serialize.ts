@@ -46,8 +46,12 @@ export function userJson(row: UserRow | PublicUser): Record<string, unknown> {
   };
 }
 
+export function profileFieldsJson(row: UserRow): Record<string, string> {
+  return { bio: row.bio ?? "", company: row.company ?? "", location: row.location ?? "", website: row.website ?? "" };
+}
+
 export function selfUserJson(row: UserRow): Record<string, unknown> {
-  return { ...userJson(row), email: row.email };
+  return { ...userJson(row), ...profileFieldsJson(row), email: row.email };
 }
 
 export function repoJson(repo: RepoRecord): Record<string, unknown> {

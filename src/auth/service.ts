@@ -27,6 +27,10 @@ export interface UserRow {
   is_bootstrap: number;
   credentials_changed_at: number | null;
   blocked_at?: number | null;
+  bio?: string;
+  company?: string;
+  location?: string;
+  website?: string;
 }
 
 export interface PublicUser {

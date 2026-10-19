@@ -155,3 +155,63 @@ export function SshKeysPanel(): ReactNode {
     </section>
   );
 }
+
+export function CommitEmailsPanel(): ReactNode {
+  const emails = useAsync(() => api.commitEmails(), []);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (action: () => Promise<unknown>): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      emails.reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update emails");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="card" aria-labelledby="commit-emails-title">
+      <div className="settings-subhead">
+        <h2 id="commit-emails-title">Commit emails</h2>
+      </div>
+      <p className="muted small">
+        Commits authored with any of these addresses count on your contribution graph. Your account email is always included. Emails are never shown publicly.
+      </p>
+      <ErrorBanner message={error ?? emails.error} />
+      <ul className="ssh-key-list">
+        <li className="ssh-key-row">
+          <Icon name="check" className="session-icon" />
+          <div className="session-text"><strong>{emails.data?.primary ?? "\u00a0"}</strong></div>
+          <span className="badge">Account email</span>
+        </li>
+        {(emails.data?.items ?? []).map((email) => (
+          <li key={email} className="ssh-key-row">
+            <Icon name="commit" className="session-icon" />
+            <div className="session-text"><span>{email}</span></div>
+            <button type="button" className="danger small" disabled={busy} onClick={() => void run(() => api.removeCommitEmail(email))}>Remove</button>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="row commit-email-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!draft.trim()) return;
+          void run(async () => {
+            await api.addCommitEmail(draft.trim());
+            setDraft("");
+          });
+        }}
+      >
+        <input type="email" value={draft} placeholder="Add a commit email" aria-label="Commit email" onChange={(event) => setDraft(event.target.value)} />
+        <button type="submit" disabled={busy || !draft.trim() || (emails.data ? emails.data.items.length >= emails.data.max : false)}>Add</button>
+      </form>
+    </section>
+  );
+}

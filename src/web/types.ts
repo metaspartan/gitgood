@@ -8,6 +8,19 @@ export interface User {
   email?: string;
   repo_count?: number;
   star_count?: number;
+  bio?: string;
+  company?: string;
+  location?: string;
+  website?: string;
+  has_profile_readme?: boolean;
+}
+
+export interface ProfileFields {
+  display_name?: string;
+  bio?: string;
+  company?: string;
+  location?: string;
+  website?: string;
 }
 
 export interface Repo {
@@ -222,9 +235,21 @@ export interface ReactionSummary {
 }
 
 export interface ContributionCalendar {
+  year: number | null;
+  years: number[];
+  from: string;
+  to: string;
   total: number;
-  breakdown: { commits: number; issues: number; pulls: number; comments: number };
+  breakdown: { commits: number; issues: number; pulls: number; comments: number; repositories: number };
   days: { date: string; count: number }[];
+  months: {
+    month: string;
+    commits: { repo: string; count: number }[];
+    repositories: { repo: string; created_at: number }[];
+    issues: { repo: string; count: number }[];
+    pulls: { repo: string; count: number }[];
+  }[];
+  joined_at: number;
 }
 
 export interface Envelope<T> {

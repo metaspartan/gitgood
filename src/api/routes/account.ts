@@ -6,6 +6,8 @@ import { bootstrapPending, clearBootstrapFlag } from "../../auth/bootstrap.ts";
 import { findUserById, listUserSessions, requireUser, revokeOtherSessions, revokeUserSession, SESSION_COOKIE, type UserRow } from "../../auth/service.ts";
 import { readCookie } from "../../lib/http.ts";
 import { notFound } from "../../lib/errors.ts";
+import { addCommitEmail, commitEmails, MAX_COMMIT_EMAILS, removeCommitEmail } from "../../data/user-emails.ts";
+import { invalidatePrefix } from "../../lib/cache.ts";
 import { one, run } from "../../db/index.ts";
 import { selfUserJson } from "../serialize.ts";
 import type { RouteContext, Router } from "../router.ts";
@@ -22,7 +24,26 @@ const profileSchema = v.strictObject({
   username: v.optional(v.string({ min: 1, max: 39 })),
   email: v.optional(v.string({ min: 3, max: 254 })),
   display_name: v.optional(v.string({ min: 1, max: 64 })),
+  bio: v.optional(v.string({ max: 160 })),
+  company: v.optional(v.string({ max: 100 })),
+  location: v.optional(v.string({ max: 100 })),
+  website: v.optional(v.string({ max: 200 })),
 });
+
+export function normalizeWebsite(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw badRequest("Website must be a valid http or https URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw badRequest("Website must be a valid http or https URL");
+  if (url.username || url.password) throw badRequest("Website must not contain credentials");
+  return url.toString();
+}
 
 const passwordSchema = v.strictObject({
   current_password: v.string({ min: 1, max: 256, trim: false }),
@@ -44,7 +65,29 @@ function currentSessionId(ctx: RouteContext): string | null {
   return ctx.auth.kind === "user" && ctx.auth.via === "session" ? readCookie(ctx.request, SESSION_COOKIE) : null;
 }
 
+const emailSchema = v.strictObject({ email: v.string({ min: 3, max: 254 }) });
+
 export function registerAccountRoutes(router: Router): void {
+  router.get("/api/account/emails", (ctx) => {
+    const user = caller(ctx);
+    return json({ primary: user.email, items: commitEmails(user.id), max: MAX_COMMIT_EMAILS });
+  });
+
+  router.post("/api/account/emails", async (ctx) => {
+    const user = caller(ctx);
+    const body = await readJson(ctx.request, emailSchema);
+    addCommitEmail(user.id, body.email);
+    invalidatePrefix("activity:");
+    return json({ primary: user.email, items: commitEmails(user.id), max: MAX_COMMIT_EMAILS }, { status: 201 });
+  });
+
+  router.delete("/api/account/emails/:email", (ctx) => {
+    const user = caller(ctx);
+    if (!removeCommitEmail(user.id, decodeURIComponent(ctx.params.email ?? ""))) throw notFound("Email not found");
+    invalidatePrefix("activity:");
+    return json({ primary: user.email, items: commitEmails(user.id), max: MAX_COMMIT_EMAILS });
+  });
+
   router.get("/api/account/sessions", (ctx) => {
     const user = caller(ctx);
     return json({ items: listUserSessions(user.id, currentSessionId(ctx)) });
@@ -107,6 +150,11 @@ export function registerAccountRoutes(router: Router): void {
     if (body.display_name !== undefined) {
       run(`UPDATE users SET display_name = ? WHERE id = ?`, body.display_name.trim(), user.id);
     }
+    for (const field of ["bio", "company", "location"] as const) {
+      const value = body[field];
+      if (value !== undefined) run(`UPDATE users SET ${field} = ? WHERE id = ?`, value.trim().replace(/\s+/g, " "), user.id);
+    }
+    if (body.website !== undefined) run("UPDATE users SET website = ? WHERE id = ?", normalizeWebsite(body.website), user.id);
 
     if (changedCredential) clearBootstrapFlag(user.id);
 

@@ -46,6 +46,7 @@ import type {
   ReactionContent,
   ReactionSummary,
   ContributionCalendar,
+  ProfileFields,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -347,8 +348,15 @@ export const api = {
     put<{ reactions: ReactionSummary[] }>(`${encodeRepo(owner, name)}/comments/${id}/reactions`, { content }),
   removeReaction: (owner: string, name: string, id: number, content: ReactionContent) =>
     del<{ reactions: ReactionSummary[] }>(`${encodeRepo(owner, name)}/comments/${id}/reactions/${encodeURIComponent(content)}`),
-  contributions: (username: string) =>
-    request<ContributionCalendar>(`/api/users/${encodeURIComponent(username)}/contributions?tz=${-new Date().getTimezoneOffset()}`),
+  contributions: (username: string, year: number | null = null) =>
+    request<ContributionCalendar>(
+      `/api/users/${encodeURIComponent(username)}/contributions?tz=${-new Date().getTimezoneOffset()}${year === null ? "" : `&year=${year}`}`,
+    ),
+  commitEmails: () => request<{ primary: string; items: string[]; max: number }>("/api/account/emails"),
+  addCommitEmail: (email: string) => post<{ primary: string; items: string[]; max: number }>("/api/account/emails", { email }),
+  removeCommitEmail: (email: string) => del<{ primary: string; items: string[]; max: number }>(`/api/account/emails/${encodeURIComponent(email)}`),
+  userPins: (username: string) => request<{ items: Repo[] }>(`/api/users/${encodeURIComponent(username)}/pins`),
+  setPins: (repoIds: number[]) => put<{ repo_ids: number[] }>("/api/user/pins", { repo_ids: repoIds }),
 
   webhooks: (owner: string, name: string, signal?: AbortSignal) =>
     request<{ items: Webhook[]; available_events: string[] }>(`${encodeRepo(owner, name)}/webhooks`, { signal }),
@@ -522,7 +530,7 @@ export const api = {
       `${encodeRepo(owner, name)}/ci/runs/${id}/log?after=${after}&limit=500`, { signal },
     ),
   accountSettings: () => request<AccountSettings>("/api/account"),
-  updateAccount: (input: { username?: string; email?: string; display_name?: string }) =>
+  updateAccount: (input: { username?: string; email?: string } & ProfileFields) =>
     patch<{ user: User; bootstrap_pending: boolean }>("/api/account", input),
   changePassword: (currentPassword: string, newPassword: string) =>
     post<{ ok: true }>("/api/account/password", {

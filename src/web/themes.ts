@@ -44,13 +44,13 @@ const PRIMARY: Partial<Record<ThemeId, [string, string]>> = {
   "github-dimmed": ["#347d39", "#2e6f32"],
 };
 
-const GITHUB_DARK_STATUS = { "--success": "#3fb950", "--danger": "#f85149", "--warning": "#d29922", "--merged": "#ab7df8" };
-const GITHUB_LIGHT_STATUS = { "--success": "#1a7f37", "--danger": "#d1242f", "--warning": "#9a6700", "--merged": "#8250df" };
+const GITHUB_DARK_STATUS = { "--success": "#3fb950", "--danger": "#f85149", "--warning": "#d29922", "--merged": "#ab7df8", "--contrib-0": "#151b23", "--contrib-1": "#033a16", "--contrib-2": "#196c2e", "--contrib-3": "#2ea043", "--contrib-4": "#56d364", "--contrib-outline": "rgba(240, 246, 252, 0.05)" };
+const GITHUB_LIGHT_STATUS = { "--success": "#1a7f37", "--danger": "#d1242f", "--warning": "#9a6700", "--merged": "#8250df", "--contrib-0": "#eff2f5", "--contrib-1": "#aceebb", "--contrib-2": "#4ac26b", "--contrib-3": "#2da44e", "--contrib-4": "#116329", "--contrib-outline": "rgba(31, 35, 40, 0.05)" };
 const GITHUB_STATUS: Partial<Record<ThemeId, Record<string, string>>> = {
   "github-dark": GITHUB_DARK_STATUS,
   "github-exact-dark": GITHUB_DARK_STATUS,
   "github-exact-light": GITHUB_LIGHT_STATUS,
-  "github-dimmed": { ...GITHUB_DARK_STATUS, "--success": "#57ab5a", "--danger": "#e5534b", "--warning": "#c69026", "--merged": "#986ee2" },
+  "github-dimmed": { ...GITHUB_DARK_STATUS, "--success": "#57ab5a", "--danger": "#e5534b", "--warning": "#c69026", "--merged": "#986ee2", "--contrib-0": "#2d333b", "--contrib-1": "#1b4721", "--contrib-2": "#2b6a30", "--contrib-3": "#46954a", "--contrib-4": "#6bc46d" },
   "github-light": GITHUB_LIGHT_STATUS,
   "github-light-soft": GITHUB_LIGHT_STATUS,
 };

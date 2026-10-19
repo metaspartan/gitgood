@@ -2,12 +2,13 @@ import { useMemo, useState, type ReactNode } from "react";
 import "./User.css";
 import { api } from "../api.ts";
 import { useSession } from "../App.tsx";
-import { Avatar, EmptyState, ErrorBanner, timeAgo, useAsync } from "../components.tsx";
+import { Avatar, EmptyState, ErrorBanner, Markdown, timeAgo, useAsync } from "../components.tsx";
+import { joinRepoPath } from "../repo-path.ts";
 import { Icon } from "../components/Icons.tsx";
 import { compactCount } from "../components/RepoSocialActions.tsx";
 import { ContributionGraph } from "../components/ContributionGraph.tsx";
-import { Link, navigate, useLocation } from "../router.tsx";
-import type { Repo } from "../types.ts";
+import { Link, useLocation } from "../router.tsx";
+import type { Repo, User } from "../types.ts";
 
 export type ProfileTab = "overview" | "repositories" | "stars";
 export type RepoSort = "updated" | "name" | "stars";
@@ -81,12 +82,12 @@ function RepoRow({ repo, showOwner }: { repo: Repo; showOwner: boolean }): React
   );
 }
 
-function PinnedCard({ repo }: { repo: Repo }): ReactNode {
+function PinnedCard({ repo, showOwner = false }: { repo: Repo; showOwner?: boolean }): ReactNode {
   return (
     <li className="pinned-card">
       <div className="pinned-card-head">
         <Icon name={repo.visibility === "private" ? "lock" : "repo"} />
-        <Link to={`/${repo.owner}/${repo.name}`} className="profile-repo-name"><strong>{repo.name}</strong></Link>
+        <Link to={`/${repo.owner}/${repo.name}`} className="profile-repo-name">{showOwner ? `${repo.owner}/` : ""}<strong>{repo.name}</strong></Link>
         <span className="badge repo-visibility">{repo.visibility === "private" ? "Private" : "Public"}</span>
       </div>
       <p className="pinned-card-description">{repo.description || "No description"}</p>
@@ -149,12 +150,153 @@ function RepoBrowser({ repos, loading, emptyTitle, emptyHint, showOwner }: {
   );
 }
 
+function ProfileReadme({ username }: { username: string }): ReactNode {
+  const readme = useAsync(() => api.readme(username, username).catch(() => null), [username]);
+  if (!readme.data?.content) return null;
+  const data = readme.data;
+  const dir = data.path && data.path.includes("/") ? data.path.slice(0, data.path.lastIndexOf("/")) : "";
+  return (
+    <section className="profile-readme" aria-label="Profile README">
+      <div className="profile-readme-head">
+        <Link to={`/${username}/${username}`} className="muted-link">{username} / {(data.path ?? "README.md").split("/").pop()}</Link>
+      </div>
+      <div className="profile-readme-body">
+        <Markdown source={data.content ?? ""} resolveImageUrl={(src) => api.rawUrl(username, username, { ...(data.ref ? { ref: data.ref } : {}), path: joinRepoPath(dir, src) })} />
+      </div>
+    </section>
+  );
+}
+
+function PinsDialog({ repos, pinned, onClose, onSaved }: { repos: Repo[]; pinned: Repo[]; onClose: () => void; onSaved: () => void }): ReactNode {
+  const [selected, setSelected] = useState<number[]>(pinned.map((repo) => repo.id));
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const options = useMemo(() => {
+    const byId = new Map<number, Repo>();
+    for (const repo of [...pinned, ...repos]) byId.set(repo.id, repo);
+    const needle = query.trim().toLowerCase();
+    return [...byId.values()].filter((repo) => !needle || repo.full_name.toLowerCase().includes(needle));
+  }, [repos, pinned, query]);
+  const remaining = 6 - selected.length;
+
+  const save = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setPins(selected);
+      onSaved();
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save pins");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="finder-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="pins-dialog" role="dialog" aria-modal="true" aria-labelledby="pins-title" onKeyDown={(event) => event.key === "Escape" && onClose()}>
+        <header>
+          <h2 id="pins-title">Edit pinned items</h2>
+          <span className="spacer" />
+          <button type="button" className="ghost icon-only" aria-label="Close" onClick={onClose}><Icon name="plus" className="rotate-45" /></button>
+        </header>
+        <div className="pins-filter">
+          <p className="small muted" style={{ margin: "0 0 8px" }}>Select up to six public repositories you’d like to show to anyone.</p>
+          <input type="search" autoFocus placeholder="Filter repositories" aria-label="Filter repositories" value={query} onChange={(event) => setQuery(event.target.value)} />
+        </div>
+        <ul className="pins-list">
+          {options.map((repo) => {
+            const checked = selected.includes(repo.id);
+            return (
+              <li key={repo.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!checked && remaining <= 0}
+                    onChange={() => setSelected((value) => (checked ? value.filter((id) => id !== repo.id) : [...value, repo.id]))}
+                  />
+                  <Icon name={repo.visibility === "private" ? "lock" : "repo"} />
+                  <span>{repo.full_name}</span>
+                  <span className="spacer" />
+                  <span className="small faint"><Icon name="star" /> {compactCount(repoStars(repo))}</span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        <ErrorBanner message={error} />
+        <footer>
+          <span className="small muted">{remaining} remaining</span>
+          <span className="spacer" />
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save pins"}</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function ProfileEditForm({ user, onDone }: { user: User; onDone: (saved: boolean) => void }): ReactNode {
+  const [form, setForm] = useState<{ display_name: string; bio: string; company: string; location: string; website: string }>({
+    display_name: user.display_name,
+    bio: user.bio ?? "",
+    company: user.company ?? "",
+    location: user.location ?? "",
+    website: user.website ?? "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const field = (key: keyof typeof form, label: string, max: number) => (
+    <label>
+      {label}
+      <input value={form[key]} maxLength={max} onChange={(event) => setForm({ ...form, [key]: event.target.value })} />
+    </label>
+  );
+  return (
+    <form
+      className="profile-edit-form"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError(null);
+        try {
+          await api.updateAccount(form);
+          onDone(true);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Could not save your profile");
+          setBusy(false);
+        }
+      }}
+    >
+      <ErrorBanner message={error} />
+      {field("display_name", "Name", 64)}
+      <label>
+        Bio
+        <textarea value={form.bio} maxLength={160} placeholder="Add a bio" onChange={(event) => setForm({ ...form, bio: event.target.value })} />
+      </label>
+      {field("company", "Company", 100)}
+      {field("location", "Location", 100)}
+      {field("website", "Website", 200)}
+      <div className="row">
+        <button type="submit" className="primary small" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+        <button type="button" className="small" onClick={() => onDone(false)}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 export function UserPage({ username }: { username: string }): ReactNode {
   const location = useLocation();
   const tab = profileTabFrom(location.split("?")[1] ?? "");
   const { user: me } = useSession();
   const profile = useAsync(() => api.user(username), [username]);
   const repos = useAsync(() => api.userRepos(username), [username]);
+  const pins = useAsync(() => api.userPins(username), [username]);
+  const { refresh } = useSession();
+  const [editing, setEditing] = useState(false);
+  const [pinsOpen, setPinsOpen] = useState(false);
   const starred = useAsync(() => (tab === "stars" ? api.userStarred(username) : Promise.resolve(null)), [username, tab]);
   const isMe = me?.username.toLowerCase() === username.toLowerCase();
 
@@ -187,12 +329,36 @@ export function UserPage({ username }: { username: string }): ReactNode {
             <span className="profile-display-name">{data?.display_name ?? "\u00a0"}</span>
             <span className="profile-username">{data?.username ?? username}</span>
           </h1>
-          {isMe ? (
-            <button type="button" className="btn-secondary profile-edit" onClick={() => navigate("/settings")}>
-              Edit profile
-            </button>
-          ) : null}
+          {editing && data ? (
+            <ProfileEditForm
+              user={data}
+              onDone={(saved) => {
+                setEditing(false);
+                if (saved) {
+                  profile.reload();
+                  refresh();
+                }
+              }}
+            />
+          ) : (
+            <>
+              {data?.bio ? <p className="profile-bio">{data.bio}</p> : null}
+              {isMe ? (
+                <button type="button" className="btn-secondary profile-edit" onClick={() => setEditing(true)}>
+                  Edit profile
+                </button>
+              ) : null}
+            </>
+          )}
           <ul className="profile-facts">
+            {data?.company ? <li><Icon name="org" /> {data.company}</li> : null}
+            {data?.location ? <li><Icon name="location" /> {data.location}</li> : null}
+            {data?.website ? (
+              <li>
+                <Icon name="link" />
+                <a href={data.website} rel="nofollow noopener noreferrer me" target="_blank">{data.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}</a>
+              </li>
+            ) : null}
             {data?.is_admin ? <li><Icon name="gear" /> Instance administrator</li> : null}
             {data ? <li><Icon name="history" /> Joined {joinedLabel(data.created_at)}</li> : <li><span className="skeleton-text" style={{ width: 140 }} /></li>}
             {data ? (
@@ -209,8 +375,13 @@ export function UserPage({ username }: { username: string }): ReactNode {
         <section className="profile-main">
           {tab === "overview" ? (
             <>
-              <h2 className="profile-section-title">{(repos.data?.items.length ?? 0) > 6 ? "Popular repositories" : "Repositories"}</h2>
-              {repos.loading ? (
+              {data?.has_profile_readme ? <ProfileReadme username={username} /> : null}
+              <div className="profile-section-head">
+                <h2 className="profile-section-title">{(pins.data?.items.length ?? 0) > 0 ? "Pinned" : (repos.data?.items.length ?? 0) > 6 ? "Popular repositories" : "Repositories"}</h2>
+                <span className="spacer" />
+                {isMe ? <button type="button" className="ghost small muted-link" onClick={() => setPinsOpen(true)}>Customize your pins</button> : null}
+              </div>
+              {repos.loading || pins.loading ? (
                 <ul className="pinned-grid" aria-hidden="true">
                   {[0, 1, 2, 3].map((index) => <li key={index} className="pinned-card"><span className="skeleton-text" style={{ width: "50%" }} /></li>)}
                 </ul>
@@ -218,10 +389,11 @@ export function UserPage({ username }: { username: string }): ReactNode {
                 <EmptyState title={isMe ? "You don\u2019t have any repositories yet" : `${username} doesn\u2019t have any public repositories yet`} />
               ) : (
                 <ul className="pinned-grid">
-                  {popularRepos(repos.data?.items ?? []).map((repo) => <PinnedCard key={repo.id} repo={repo} />)}
+                  {((pins.data?.items.length ?? 0) > 0 ? pins.data!.items : popularRepos(repos.data?.items ?? [])).map((repo) => <PinnedCard key={repo.id} repo={repo} showOwner={repo.owner.toLowerCase() !== username.toLowerCase()} />)}
                 </ul>
               )}
-              <ContributionGraph username={username} />
+              <ContributionGraph username={username} name={data?.display_name ?? username} />
+              {pinsOpen ? <PinsDialog repos={repos.data?.items ?? []} pinned={pins.data?.items ?? []} onClose={() => setPinsOpen(false)} onSaved={pins.reload} /> : null}
             </>
           ) : tab === "repositories" ? (
             <RepoBrowser repos={repos.data?.items} loading={repos.loading} emptyTitle="No repositories" showOwner={false} />

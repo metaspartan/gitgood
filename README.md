@@ -117,7 +117,7 @@ Each job runs in a fresh container (memory, CPU and PID limits, `no-new-privileg
 
 - **Code**: file browser with latest-commit bar, "Go to file" fuzzy finder (`t`), blame, raw/archive downloads, syntax highlighting, virtualized large-file viewer, Markdown READMEs, image/audio/video/3D previews, in-browser editing.
 - **History**: commits grouped by day with expandable descriptions, commit pages with per-file menus, image and 3D diffs, branch compare.
-- **Collaboration**: issues and pull requests with reviews, comment editing and emoji reactions, contribution graphs on profiles, required checks, merge policies, labels, milestones, assignees, event timelines, notifications, mentions, stars, watches and forks.
+- **Collaboration**: issues and pull requests with reviews, comment editing and emoji reactions, GitHub-style profiles (profile README, pinned repositories, bio and links, contribution graph from git history with yearly activity timeline), required checks, merge policies, labels, milestones, assignees, event timelines, notifications, mentions, stars, watches and forks.
 - **Organizations** with owner/admin/member roles and per-repository collaborators.
 - **Git LFS** (batch API, locks) with deduplicated storage and per-repository usage.
 - **Webhooks** with SSRF protection, delivery history and retries.
