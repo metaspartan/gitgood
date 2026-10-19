@@ -2,30 +2,46 @@
 
 A fast, low-memory, self-hosted Git platform. Repositories, issues, pull requests with reviews, Actions-style CI with isolated runners, Git LFS, releases, organizations and a GitLab-style admin area — in one Bun process backed by SQLite.
 
-GitGood is built for people who want GitHub's workflow on their own hardware without running a fleet of services. It idles at tens of megabytes of RAM, serves cached pages in single-digit milliseconds, and keeps every byte of your code on your machine.
+GitGood is built for people who want GitHub's workflow on their own hardware without running a fleet of services. It idles at about 20 MiB of RAM — a fifth of Gitea and a fraction of a percent of GitLab's baseline — serves cached pages in single-digit milliseconds, and keeps every byte of your code on your machine.
+
+![GitGood repository page in the GitHub 1:1 Dark theme](docs/screenshot.png)
+
+## Performance and memory
+
+Measured on the same Linux host (Docker 29, x86-64), each server freshly started with an empty SQLite database and capped at 2 GB, then hit with 200 sequential requests for its home page:
+
+| | **GitGood** | Gitea 28.2 | Forgejo 11 | GitLab CE |
+|---|---|---|---|---|
+| Idle memory (RSS) | **21 MiB** | 100 MiB | 106 MiB | not measured — needs 16 GB baseline, 8 GB constrained¹ |
+| Memory after 200 requests | **24 MiB** | 110 MiB | 119 MiB | 2–2.5 GB + 1 GB swap for ≤5 users in a tuned setup² |
+| Mean request time incl. client process spawn | **4.3 ms** | 5.3 ms | 5.2 ms | – |
+| Container image | 219 MB | 249 MB | 245 MB | several GB (omnibus) |
+| Services inside | 1 | 1 | 1 | Puma, Sidekiq, Gitaly, Workhorse, PostgreSQL, Redis, NGINX… |
+
+The request figure is dominated by spawning `curl` for each request, so read it as "all three are fast", not as a precise ratio. GitGood serves a cached HTML shell and renders in the browser; Gitea and Forgejo render server-side.
+
+A real deployment stays small too: an instance hosting a 21,000-file game repository with 279 branches and over 43,000 Git LFS objects (~71 GB) runs at **16–17 MiB RSS**. GitHub is a hosted service and is not comparable on resource use.
+
+Reproduce: `docker run -d --tmpfs /data:uid=1000,gid=1000 -e GITGOOD_DATA_DIR=/data gitgood`, wait a minute, then `docker stats --no-stream`. `bun run bench` covers API throughput and git transfer speed on your own hardware.
 
 ## How it compares
 
 | | **GitGood** | GitHub | GitLab (self-managed) | Gitea / Forgejo |
 |---|---|---|---|---|
 | Self-hosted | ✅ | Enterprise Server only | ✅ | ✅ |
-| Documented minimum memory | **None required beyond Bun; measured 17–51 MiB RSS** | n/a (SaaS) | 16 GB baseline, 8 GB constrained¹ | ~1 GB for small teams² |
 | Services to operate | **1** (Bun + git) | n/a | Rails, Puma, Sidekiq, Gitaly, PostgreSQL, Redis, NGINX… | 1 binary + database |
 | Database | Embedded SQLite (WAL) | n/a | PostgreSQL | SQLite / PostgreSQL / MySQL |
-| Git over HTTPS and SSH | ✅ | ✅ | ✅ | ✅ |
-| Git LFS with per-repository usage | ✅ | ✅ | ✅ | ✅ |
+| Git over HTTPS and SSH, Git LFS | ✅ | ✅ | ✅ | ✅ |
 | Issues, pull requests, reviews, milestones, assignees | ✅ | ✅ | ✅ | ✅ |
-| Actions-style CI, on by default | ✅ | ✅ | ✅ | ✅ |
-| CI jobs never execute on the server | ✅ external runners, fresh container per job | ✅ | ✅ | ✅ |
+| Actions-style CI, on by default, jobs never run on the server | ✅ external runners, fresh container per job | ✅ | ✅ | ✅ |
 | 3D preview (GLB / glTF / OBJ / PLY / STL / 3MF) incl. KTX2 + meshopt | ✅ with before/after diffs | STL | STL | – |
-| Image diffs (2-up / onion skin), including LFS images | ✅ | ✅ | ✅ | ✅ |
-| Admin area (users, block, roles, runners, instance settings, backups) | ✅ | Enterprise | ✅ | ✅ |
-| Themes | 26, per-user "sync with system" | ✅ | ✅ | ✅ |
+| Image diffs, including LFS images | ✅ | ✅ | ✅ | ✅ |
+| Admin area: users, block, roles, sign-out, 2FA reset, runners, settings, audit log, backups | ✅ | Enterprise | ✅ | ✅ |
+| Account security: TOTP, passkeys, scoped tokens, active session management | ✅ | ✅ | ✅ | ✅ |
+| Themes | 28 incl. GitHub 1:1, per-user "sync with system" | ✅ | ✅ | ✅ |
 | Production dependencies | 3 npm packages (react, react-dom, three), 0 known vulnerabilities (OSV) | n/a | hundreds | Go modules |
 
-¹ [GitLab installation requirements](https://docs.gitlab.com/install/requirements/) · ² [Gitea documentation](https://docs.gitea.com/)
-
-The GitGood figures were measured on a live instance hosting a 21,000-file repository with 71 GB of LFS objects (17 MiB idle) and on a 400-repository seed dataset (51 MiB). Run `bun run bench` to reproduce on your hardware.
+¹ [GitLab installation requirements](https://docs.gitlab.com/install/requirements/) · ² [Running GitLab in a memory-constrained environment](https://docs.gitlab.com/omnibus/settings/memory_constrained_envs/)
 
 ## Quick start
 
@@ -106,6 +122,8 @@ Each job runs in a fresh container (memory, CPU and PID limits, `no-new-privileg
 - **Git LFS** (batch API, locks) with deduplicated storage and per-repository usage.
 - **Webhooks** with SSRF protection, delivery history and retries.
 - **Security**: Argon2id passwords, TOTP and passkeys (password-only Git/API access is refused once two-factor is on), scoped and repository-pinned tokens, per-account and per-IP login throttling, strict CSP, CSRF protection, masked 404s for private resources, blocked-user enforcement across web, API, Git and SSH.
+- **Administration**: GitLab-style admin area with user search, roles, blocking, sign-out-everywhere and two-factor reset, runner management, instance settings and a searchable audit log of every administrative change.
+- **Account**: profile, password, TOTP with recovery codes, passkeys, scoped access tokens, per-browser themes and an active-sessions list with one-click revoke.
 - **Operations**: online backup/restore to local, NAS or cloud destinations, storage quotas, readiness/health endpoints, Prometheus-style metrics, structured logs.
 
 ## Configuration

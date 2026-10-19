@@ -87,6 +87,20 @@ export function migrate(): void {
   db.exec(require("node:fs").readFileSync(new URL("./migrations/008_lfs_repo_objects.sql", import.meta.url), "utf8"));
   db.exec(require("node:fs").readFileSync(new URL("./migrations/009_runners_admin.sql", import.meta.url), "utf8"));
   addColumnIfMissing("users", "blocked_at", "INTEGER");
+  addColumnIfMissing("sessions", "ip", "TEXT");
+  addColumnIfMissing("sessions", "user_agent", "TEXT");
+  addColumnIfMissing("sessions", "last_seen_at", "INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    actor_username TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC)");
   addColumnIfMissing("watches", "level", "TEXT NOT NULL DEFAULT 'all'");
   addColumnIfMissing("repos", "actions_enabled", "INTEGER NOT NULL DEFAULT 1");
   addColumnIfMissing("ci_runs", "executor", "TEXT NOT NULL DEFAULT 'local'");

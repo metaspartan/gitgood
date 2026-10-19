@@ -7,7 +7,8 @@ import { schedulerStats } from "../../ci/scheduler.ts";
 import { countPendingRuns } from "../../ci/store.ts";
 import { config } from "../../config.ts";
 import { join } from "node:path";
-import { requireAdmin } from "../../auth/service.ts";
+import { requireAdmin, type Principal } from "../../auth/service.ts";
+import { recordAudit } from "../../data/audit.ts";
 import { badRequest, conflict, forbidden } from "../../lib/errors.ts";
 import { json, readJson } from "../../lib/http.ts";
 import { parseBackupDestinations } from "../../lib/backup-destinations.ts";
@@ -24,10 +25,11 @@ interface BackupJob {
 const jobs: BackupJob[] = [];
 let active = false;
 
-function authorize(ctx: RouteContext): void {
+function authorize(ctx: RouteContext): Principal {
   if (ctx.request.headers.has("authorization")) throw forbidden("Use an administrator browser session");
   const principal = requireAdmin(ctx.auth);
   if (principal.via !== "session") throw forbidden("Use an administrator browser session");
+  return principal;
 }
 
 export function registerBackupRoutes(router: Router): void {
@@ -37,9 +39,10 @@ export function registerBackupRoutes(router: Router): void {
   };
   router.get("/api/appearance", () => json(appearance(), { headers: { "cache-control": "no-store" } }));
   router.put("/api/admin/appearance", async ctx => {
-    authorize(ctx);
+    const admin = authorize(ctx);
     const body = await readJson(ctx.request, v.strictObject({ theme: v.string({ min: 1, max: 40 }) }));
     if (!themeById(body.theme)) throw badRequest("Unknown theme");
+    recordAudit(admin, "appearance.theme", body.theme, "", ctx.ip);
     changes("INSERT INTO instance_appearance(id,theme) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET theme=excluded.theme", body.theme);
     return json(appearance());
   });
@@ -54,9 +57,10 @@ export function registerBackupRoutes(router: Router): void {
     return json(repositoryDefaultQuota());
   });
   router.put("/api/admin/storage-policy", async ctx => {
-    authorize(ctx);
+    const admin = authorize(ctx);
     const body = await readJson(ctx.request, v.strictObject({ default_repo_quota_bytes: v.number({ int: true, min: 0, max: 1024 ** 5 }) }));
     setRepositoryDefaultQuota(body.default_repo_quota_bytes);
+    recordAudit(admin, "storage.default_quota", "instance", `${body.default_repo_quota_bytes} bytes`, ctx.ip);
     return json(repositoryDefaultQuota());
   });
 

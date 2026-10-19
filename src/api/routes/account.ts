@@ -3,7 +3,9 @@ import { badRequest, conflict, unauthorized } from "../../lib/errors.ts";
 import { json, readJson } from "../../lib/http.ts";
 import { hashPassword, verifyPassword, assertPasswordStrength } from "../../auth/password.ts";
 import { bootstrapPending, clearBootstrapFlag } from "../../auth/bootstrap.ts";
-import { findUserById, requireUser, SESSION_COOKIE, type UserRow } from "../../auth/service.ts";
+import { findUserById, listUserSessions, requireUser, revokeOtherSessions, revokeUserSession, SESSION_COOKIE, type UserRow } from "../../auth/service.ts";
+import { readCookie } from "../../lib/http.ts";
+import { notFound } from "../../lib/errors.ts";
 import { one, run } from "../../db/index.ts";
 import { selfUserJson } from "../serialize.ts";
 import type { RouteContext, Router } from "../router.ts";
@@ -38,7 +40,28 @@ function orgExists(name: string): boolean {
   return (one<{ c: number }>(`SELECT COUNT(*) AS c FROM orgs WHERE name = ? COLLATE NOCASE`, name)?.c ?? 0) > 0;
 }
 
+function currentSessionId(ctx: RouteContext): string | null {
+  return ctx.auth.kind === "user" && ctx.auth.via === "session" ? readCookie(ctx.request, SESSION_COOKIE) : null;
+}
+
 export function registerAccountRoutes(router: Router): void {
+  router.get("/api/account/sessions", (ctx) => {
+    const user = caller(ctx);
+    return json({ items: listUserSessions(user.id, currentSessionId(ctx)) });
+  });
+
+  router.delete("/api/account/sessions/:id", (ctx) => {
+    const user = caller(ctx);
+    const id = ctx.params.id ?? "";
+    if (!/^[0-9a-f]{20}$/.test(id) || !revokeUserSession(user.id, id)) throw notFound("Session not found");
+    return new Response(null, { status: 204 });
+  });
+
+  router.post("/api/account/sessions/revoke-others", (ctx) => {
+    const user = caller(ctx);
+    return json({ revoked: revokeOtherSessions(user.id, currentSessionId(ctx)) });
+  });
+
   router.get("/api/account", (ctx) => {
     const user = caller(ctx);
     return json({

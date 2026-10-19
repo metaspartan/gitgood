@@ -6,6 +6,7 @@ import { useSession } from "../App.tsx";
 import { Link } from "../router.tsx";
 import type { PasskeyChallenge } from "../types.ts";
 import { PersonalAppearance } from "../components/PersonalAppearance.tsx";
+import { SessionsPanel } from "../components/SessionsPanel.tsx";
 
 export function SettingsPage(): ReactNode {
   const { user, refresh } = useSession();
@@ -480,6 +481,8 @@ export function SettingsPage(): ReactNode {
           </button>
         </form>
       </div>
+
+      <SessionsPanel />
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Personal access tokens</h3>

@@ -133,25 +133,80 @@ export async function verifyCredentials(username: string, password: string): Pro
   return user;
 }
 
-export function issueSession(userId: number): string {
+export interface SessionMeta {
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
+const SESSION_TOUCH_MS = 60_000;
+
+export function issueSession(userId: number, meta: SessionMeta = {}): string {
   const sessionId = generateSessionId();
   const timestamp = now();
   run(
-    "INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO sessions (id, user_id, expires_at, created_at, ip, user_agent, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     sessionId,
     userId,
     timestamp + config.sessionTtlSeconds * 1000,
+    timestamp,
+    meta.ip?.slice(0, 64) ?? null,
+    meta.userAgent?.slice(0, 400) ?? null,
     timestamp,
   );
   return sessionId;
 }
 
+export function sessionPublicId(sessionId: string): string {
+  return sha256Hex(sessionId).slice(0, 20);
+}
+
+export interface SessionSummary {
+  id: string;
+  current: boolean;
+  created_at: number;
+  last_seen_at: number | null;
+  expires_at: number;
+  ip: string | null;
+  user_agent: string | null;
+}
+
+export function listUserSessions(userId: number, currentSessionId: string | null): SessionSummary[] {
+  const rows = all<{ id: string; created_at: number; last_seen_at: number | null; expires_at: number; ip: string | null; user_agent: string | null }>(
+    "SELECT id, created_at, last_seen_at, expires_at, ip, user_agent FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY COALESCE(last_seen_at, created_at) DESC",
+    userId,
+    now(),
+  );
+  return rows.map((row) => ({
+    id: sessionPublicId(row.id),
+    current: row.id === currentSessionId,
+    created_at: row.created_at,
+    last_seen_at: row.last_seen_at,
+    expires_at: row.expires_at,
+    ip: row.ip,
+    user_agent: row.user_agent,
+  }));
+}
+
+export function revokeUserSession(userId: number, publicId: string): boolean {
+  const rows = all<{ id: string }>("SELECT id FROM sessions WHERE user_id = ?", userId);
+  const match = rows.find((row) => sessionPublicId(row.id) === publicId);
+  if (!match) return false;
+  return changes("DELETE FROM sessions WHERE id = ?", match.id) > 0;
+}
+
+export function revokeOtherSessions(userId: number, keepSessionId: string | null): number {
+  return keepSessionId === null
+    ? changes("DELETE FROM sessions WHERE user_id = ?", userId)
+    : changes("DELETE FROM sessions WHERE user_id = ? AND id <> ?", userId, keepSessionId);
+}
+
 export async function login(
   username: string,
   password: string,
+  meta: SessionMeta = {},
 ): Promise<{ user: UserRow; sessionId: string }> {
   const user = await verifyCredentials(username, password);
-  return { user, sessionId: issueSession(user.id) };
+  return { user, sessionId: issueSession(user.id, meta) };
 }
 
 export function logout(sessionId: string): void {
@@ -246,8 +301,8 @@ export function principalForToken(token: string): Principal | null {
 }
 
 export function principalForSession(sessionId: string): Principal | null {
-  const session = one<{ id: string; user_id: number; expires_at: number; created_at: number }>(
-    "SELECT id, user_id, expires_at, created_at FROM sessions WHERE id = ?",
+  const session = one<{ id: string; user_id: number; expires_at: number; created_at: number; last_seen_at: number | null }>(
+    "SELECT id, user_id, expires_at, created_at, last_seen_at FROM sessions WHERE id = ?",
     sessionId,
   );
   if (!session) return null;
@@ -262,6 +317,10 @@ export function principalForSession(sessionId: string): Principal | null {
   if (changedAt !== null && session.created_at !== undefined && session.created_at < changedAt) {
     changes("DELETE FROM sessions WHERE id = ?", sessionId);
     return null;
+  }
+  const timestamp = now();
+  if ((session.last_seen_at ?? 0) < timestamp - SESSION_TOUCH_MS) {
+    changes("UPDATE sessions SET last_seen_at = ? WHERE id = ?", timestamp, sessionId);
   }
 
   return {

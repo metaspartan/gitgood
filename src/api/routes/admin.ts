@@ -9,6 +9,7 @@ import { conflict, notFound } from "../../lib/errors.ts";
 import { json, readJson } from "../../lib/http.ts";
 import * as v from "../../lib/validate.ts";
 import { param, positiveId } from "../helpers.ts";
+import { listAudit, recordAudit } from "../../data/audit.ts";
 import type { RouteContext, Router } from "../router.ts";
 
 const PAGE_SIZE = 50;
@@ -26,6 +27,8 @@ const updateUserSchema = v.strictObject({
   is_admin: v.optional(v.boolean()),
   blocked: v.optional(v.boolean()),
   password: v.optional(v.string({ min: 8, max: 256, trim: false })),
+  sign_out: v.optional(v.literal(true)),
+  reset_two_factor: v.optional(v.literal(true)),
 });
 
 const settingsSchema = v.strictObject({
@@ -46,10 +49,16 @@ interface AdminUserRow {
   blocked_at: number | null;
   repo_count: number;
   last_active_at: number | null;
+  two_factor: number;
+  session_count: number;
 }
 
 function adminFor(ctx: RouteContext, mutating: boolean): Principal {
   return requireInstanceAdmin(ctx.auth, mutating);
+}
+
+function audit(ctx: RouteContext, admin: Principal, action: string, target: string, detail = ""): void {
+  recordAudit({ userId: admin.userId, username: admin.username }, action, target, detail, ctx.ip);
 }
 
 function pageOf(ctx: RouteContext): { page: number; offset: number; q: string } {
@@ -75,12 +84,16 @@ function userJson(row: AdminUserRow) {
     created_at: row.created_at,
     repo_count: row.repo_count,
     last_active_at: row.last_active_at,
+    two_factor: row.two_factor === 1,
+    session_count: row.session_count,
   };
 }
 
 const USER_SELECT = `SELECT u.id, u.username, u.email, u.display_name, u.is_admin, u.avatar_hue, u.created_at, u.blocked_at,
   (SELECT COUNT(*) FROM repos r WHERE r.owner_id = u.id AND r.org_id IS NULL) AS repo_count,
-  (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_active_at
+  (SELECT MAX(COALESCE(s.last_seen_at, s.created_at)) FROM sessions s WHERE s.user_id = u.id) AS last_active_at,
+  (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > CAST(strftime('%s','now') AS INTEGER) * 1000) AS session_count,
+  CASE WHEN u.totp_confirmed_at IS NOT NULL OR EXISTS (SELECT 1 FROM passkeys p WHERE p.user_id = u.id) THEN 1 ELSE 0 END AS two_factor
   FROM users u`;
 
 function loadAdminUser(id: number): AdminUserRow {
@@ -153,7 +166,7 @@ export function registerAdminRoutes(router: Router): void {
   });
 
   router.post("/api/admin/users", async (ctx) => {
-    adminFor(ctx, true);
+    const admin = adminFor(ctx, true);
     const body = await readJson(ctx.request, createUserSchema);
     const user = await createUser({
       username: body.username,
@@ -162,6 +175,7 @@ export function registerAdminRoutes(router: Router): void {
       ...(body.display_name ? { displayName: body.display_name } : {}),
     });
     if (body.is_admin) changes("UPDATE users SET is_admin = 1 WHERE id = ?", user.id);
+    audit(ctx, admin, "user.create", user.username, body.is_admin ? "administrator" : "");
     return json({ user: userJson(loadAdminUser(user.id)) }, { status: 201 });
   });
 
@@ -185,6 +199,22 @@ export function registerAdminRoutes(router: Router): void {
       run("UPDATE users SET password_hash = ?, credentials_changed_at = ? WHERE id = ?", await hashPassword(body.password), now(), id);
       changes("DELETE FROM sessions WHERE user_id = ?", id);
     }
+    if (body.sign_out) changes("DELETE FROM sessions WHERE user_id = ?", id);
+    if (body.reset_two_factor) {
+      if (self) throw conflict("Reset your own two-factor authentication from your account settings");
+      changes("UPDATE users SET totp_secret = NULL, totp_confirmed_at = NULL WHERE id = ?", id);
+      changes("DELETE FROM recovery_codes WHERE user_id = ?", id);
+      changes("DELETE FROM passkeys WHERE user_id = ?", id);
+      changes("DELETE FROM sessions WHERE user_id = ?", id);
+    }
+    const actions = [
+      body.is_admin === true ? "user.promote" : body.is_admin === false ? "user.demote" : null,
+      body.blocked === true ? "user.block" : body.blocked === false ? "user.unblock" : null,
+      body.password !== undefined ? "user.password_reset" : null,
+      body.sign_out ? "user.sign_out" : null,
+      body.reset_two_factor ? "user.two_factor_reset" : null,
+    ].filter((action): action is string => action !== null);
+    for (const action of actions) audit(ctx, admin, action, target.username);
     return json({ user: userJson(loadAdminUser(id)) });
   });
 
@@ -197,6 +227,7 @@ export function registerAdminRoutes(router: Router): void {
     if (target.is_admin === 1 && target.blocked_at === null && activeAdminCount() <= 1) throw conflict("The instance must keep at least one active administrator");
     if (!findUserById(id)) throw notFound("User not found");
     changes("DELETE FROM users WHERE id = ?", id);
+    audit(ctx, admin, "user.delete", target.username);
     return new Response(null, { status: 204 });
   });
 
@@ -234,8 +265,9 @@ export function registerAdminRoutes(router: Router): void {
   });
 
   router.put("/api/admin/settings", async (ctx) => {
-    adminFor(ctx, true);
+    const admin = adminFor(ctx, true);
     const body = await readJson(ctx.request, settingsSchema);
+    audit(ctx, admin, "settings.update", "instance", Object.entries(body).map(([key, value]) => `${key}=${String(value)}`).join(", "));
     updateInstanceSettings({
       ...(body.allow_signup !== undefined ? { allowSignup: body.allow_signup } : {}),
       ...(body.allow_repo_creation !== undefined ? { allowRepoCreation: body.allow_repo_creation } : {}),
@@ -243,5 +275,12 @@ export function registerAdminRoutes(router: Router): void {
       ...(body.actions_default_enabled !== undefined ? { actionsDefaultEnabled: body.actions_default_enabled } : {}),
     });
     return json(settingsJson());
+  });
+
+  router.get("/api/admin/audit", (ctx) => {
+    adminFor(ctx, false);
+    const { page, offset, q } = pageOf(ctx);
+    const result = listAudit({ query: q, limit: PAGE_SIZE, offset });
+    return json({ ...result, page, per_page: PAGE_SIZE });
   });
 }

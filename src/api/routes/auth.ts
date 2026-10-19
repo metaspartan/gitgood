@@ -28,9 +28,9 @@ import { normalizeRepoName } from "../../git/repo.ts";
 import { isWellFormedCode, verifyTotp } from "../../auth/totp.ts";
 import { consumeRecoveryCode, getTotpLastStep, getTotpState, setTotpLastStep, currentTotpStep } from "../../auth/account-store.ts";
 import { hashRecoveryCode } from "../../auth/totp.ts";
-import { issueSession, verifyCredentials } from "../../auth/service.ts";
+import { issueSession, verifyCredentials, type SessionMeta } from "../../auth/service.ts";
 import { createdTokenJson, selfUserJson, tokenJson } from "../serialize.ts";
-import type { Router } from "../router.ts";
+import type { RouteContext, Router } from "../router.ts";
 import { instanceSettings } from "../../data/instance-settings.ts";
 
 const signupSchema = v.strictObject({
@@ -68,6 +68,10 @@ function sessionHeaders(sessionId: string): Record<string, string> {
   };
 }
 
+function sessionMeta(ctx: RouteContext): SessionMeta {
+  return { ip: ctx.ip, userAgent: ctx.request.headers.get("user-agent") };
+}
+
 export function registerAuthRoutes(router: Router): void {
   router.post("/api/auth/signup", async (ctx) => {
     const body = await readJson(ctx.request, signupSchema);
@@ -87,7 +91,7 @@ export function registerAuthRoutes(router: Router): void {
       const message = error instanceof Error ? error.message : "Could not create account";
       throw message.includes("taken") ? conflict(message) : badRequest(message);
     }
-    const { sessionId } = await login(user.username, body.password);
+    const { sessionId } = await login(user.username, body.password, sessionMeta(ctx));
     return json({ user: selfUserJson(user) }, { status: 201, headers: sessionHeaders(sessionId) });
   });
 
@@ -110,7 +114,7 @@ export function registerAuthRoutes(router: Router): void {
     }
     recordLoginSuccess(body.username);
 
-    const sessionId = issueSession(user.id);
+    const sessionId = issueSession(user.id, sessionMeta(ctx));
     pruneExpiredSessions();
     return json({ user: selfUserJson(user) }, { headers: sessionHeaders(sessionId) });
   });
@@ -157,7 +161,7 @@ export function registerAuthRoutes(router: Router): void {
     }
     recordLoginSuccess(body.username);
 
-    const sessionId = issueSession(user.id);
+    const sessionId = issueSession(user.id, sessionMeta(ctx));
     pruneExpiredSessions();
     return json({ user: selfUserJson(user) }, { headers: sessionHeaders(sessionId) });
   });

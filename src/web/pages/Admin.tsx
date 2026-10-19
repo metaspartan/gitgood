@@ -6,8 +6,9 @@ import { Avatar, EmptyState, ErrorBanner, formatBytes, timeAgo, useAsync } from 
 import { Icon, type IconName } from "../components/Icons.tsx";
 import { Switch } from "../components/Switch.tsx";
 import { Link } from "../router.tsx";
+import { usePopover } from "../use-popover.ts";
 
-export type AdminSection = "overview" | "users" | "repositories" | "runners" | "settings" | "configuration" | "backups";
+export type AdminSection = "overview" | "users" | "repositories" | "runners" | "settings" | "audit" | "configuration" | "backups";
 
 const NAV: { id: AdminSection; label: string; icon: IconName; to: string }[] = [
   { id: "overview", label: "Overview", icon: "pulse", to: "/admin" },
@@ -16,6 +17,7 @@ const NAV: { id: AdminSection; label: string; icon: IconName; to: string }[] = [
   { id: "runners", label: "Runners", icon: "play", to: "/admin/runners" },
   { id: "settings", label: "Settings", icon: "gear", to: "/admin/settings" },
   { id: "configuration", label: "Configuration", icon: "database", to: "/admin/configuration" },
+  { id: "audit", label: "Audit log", icon: "history", to: "/admin/audit" },
   { id: "backups", label: "Backups", icon: "download", to: "/admin/backups" },
 ];
 
@@ -119,6 +121,8 @@ interface AdminUser {
   created_at: number;
   repo_count: number;
   last_active_at: number | null;
+  two_factor: boolean;
+  session_count: number;
 }
 
 interface Page<T> {
@@ -192,7 +196,7 @@ export function AdminUsers(): ReactNode {
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
-            <tr><th>User</th><th>Role</th><th className="num">Repos</th><th>Joined</th><th>Last sign-in</th><th aria-label="Actions" /></tr>
+            <tr><th>User</th><th>Role</th><th>Security</th><th className="num">Repos</th><th className="hide-narrow">Joined</th><th>Last active</th><th aria-label="Actions" /></tr>
           </thead>
           <tbody aria-busy={list.loading}>
             {(list.data?.items ?? []).map((row) => (
@@ -210,22 +214,19 @@ export function AdminUsers(): ReactNode {
                   {row.is_admin ? <span className="badge admin-badge">Admin</span> : <span className="small muted">Regular</span>}
                   {row.blocked ? <span className="badge closed" style={{ marginLeft: 6 }}>Blocked</span> : null}
                 </td>
+                <td>
+                  {row.two_factor ? <span className="badge open">2FA</span> : <span className="small faint">No 2FA</span>}
+                  <div className="small faint">{row.session_count} {row.session_count === 1 ? "session" : "sessions"}</div>
+                </td>
                 <td className="num">{row.repo_count}</td>
-                <td className="small muted">{timeAgo(row.created_at)}</td>
+                <td className="small muted hide-narrow">{timeAgo(row.created_at)}</td>
                 <td className="small muted">{row.last_active_at ? timeAgo(row.last_active_at) : "Never"}</td>
                 <td className="admin-actions">
                   {row.id === me?.id ? <span className="small faint">You</span> : (
-                    <>
-                      <button type="button" className="btn-secondary small" onClick={() => void act(row.id, { is_admin: !row.is_admin })}>{row.is_admin ? "Remove admin" : "Make admin"}</button>
-                      <button type="button" className="btn-secondary small" onClick={() => void act(row.id, { blocked: !row.blocked })}>{row.blocked ? "Unblock" : "Block"}</button>
-                      <button
-                        type="button"
-                        className="btn-secondary small danger-text"
-                        onClick={() => { if (window.confirm(`Delete ${row.username}? This cannot be undone.`)) void act(row.id, {}, "DELETE"); }}
-                      >
-                        Delete
-                      </button>
-                    </>
+                    <UserActionsMenu
+                      user={row}
+                      onAction={(body, method) => void act(row.id, body, method)}
+                    />
                   )}
                 </td>
               </tr>
@@ -233,6 +234,93 @@ export function AdminUsers(): ReactNode {
           </tbody>
         </table>
         {list.data && list.data.items.length === 0 ? <EmptyState title="No users match" /> : null}
+      </div>
+      {list.data ? <Pager page={page} total={list.data.total} perPage={list.data.per_page} onPage={setPage} /> : null}
+    </>
+  );
+}
+
+function UserActionsMenu({ user, onAction }: { user: AdminUser; onAction: (body: Record<string, unknown>, method?: string) => void }): ReactNode {
+  const menu = usePopover<HTMLDivElement>();
+  const [upward, setUpward] = useState(false);
+  const toggle = (): void => {
+    const rect = menu.ref.current?.getBoundingClientRect();
+    setUpward(rect ? rect.bottom + 320 > window.innerHeight && rect.top > 320 : false);
+    menu.setOpen((v) => !v);
+  };
+  const run = (body: Record<string, unknown>, confirmText?: string, method?: string): void => {
+    menu.setOpen(false);
+    if (confirmText && !window.confirm(confirmText)) return;
+    onAction(body, method);
+  };
+  return (
+    <div className="btn-group" ref={menu.ref}>
+      <button type="button" className="btn-secondary small icon-only" aria-label={`Actions for ${user.username}`} aria-haspopup="menu" aria-expanded={menu.open} onClick={toggle}>
+        <Icon name="kebab" />
+      </button>
+      {menu.open ? (
+        <div className={`action-menu${upward ? " opens-up" : ""}`} role="menu">
+          <button type="button" role="menuitem" className="action-menu-item" onClick={() => run({ is_admin: !user.is_admin })}>
+            <span className="action-menu-text"><strong>{user.is_admin ? "Remove administrator" : "Make administrator"}</strong></span>
+          </button>
+          <button type="button" role="menuitem" className="action-menu-item" onClick={() => run({ sign_out: true }, `Sign ${user.username} out of every session?`)} disabled={user.session_count === 0}>
+            <span className="action-menu-text"><strong>Sign out everywhere</strong><span>Ends all {user.session_count} active sessions.</span></span>
+          </button>
+          <button type="button" role="menuitem" className="action-menu-item" onClick={() => run({ reset_two_factor: true }, `Remove two-factor authentication and passkeys for ${user.username}? They will need to set it up again.`)} disabled={!user.two_factor}>
+            <span className="action-menu-text"><strong>Reset two-factor</strong><span>For users locked out of their authenticator.</span></span>
+          </button>
+          <button type="button" role="menuitem" className="action-menu-item" onClick={() => run({ blocked: !user.blocked }, user.blocked ? undefined : `Block ${user.username}? They are signed out and cannot sign in, push or use tokens.`)}>
+            <span className="action-menu-text"><strong>{user.blocked ? "Unblock" : "Block"}</strong></span>
+          </button>
+          <button type="button" role="menuitem" className="action-menu-item danger-text" onClick={() => run({}, `Delete ${user.username}? This cannot be undone.`, "DELETE")}>
+            <span className="action-menu-text"><strong>Delete user</strong></span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+interface AuditEntry {
+  id: number;
+  actor_username: string;
+  action: string;
+  target: string;
+  detail: string;
+  ip: string;
+  created_at: number;
+}
+
+export function AdminAudit(): ReactNode {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const list = useAsync(() => request<Page<AuditEntry>>(`/api/admin/audit?page=${page}&q=${encodeURIComponent(query)}`), [page, query]);
+  return (
+    <>
+      <h1 className="admin-title">Audit log</h1>
+      <p className="muted admin-lede">Every administrative change, who made it and from where. The newest 50,000 entries are kept.</p>
+      <ErrorBanner message={list.error} />
+      <div className="admin-toolbar">
+        <input type="search" placeholder="Filter by action, target or administrator" aria-label="Filter audit log" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
+        <span className="small muted">{list.data ? `${list.data.total.toLocaleString()} entries` : "\u00a0"}</span>
+      </div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>When</th><th>Administrator</th><th>Action</th><th>Target</th><th className="hide-narrow">Details</th><th className="hide-narrow">IP address</th></tr></thead>
+          <tbody aria-busy={list.loading}>
+            {(list.data?.items ?? []).map((entry) => (
+              <tr key={entry.id}>
+                <td className="small muted" title={new Date(entry.created_at).toLocaleString()}>{timeAgo(entry.created_at)}</td>
+                <td><Link to={`/${entry.actor_username}`} className="admin-user-name">{entry.actor_username}</Link></td>
+                <td><code className="audit-action">{entry.action}</code></td>
+                <td className="small">{entry.target}</td>
+                <td className="small muted hide-narrow">{entry.detail || "\u2013"}</td>
+                <td className="small mono muted hide-narrow">{entry.ip || "\u2013"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.data && list.data.items.length === 0 ? <EmptyState title={query ? "No entries match" : "Nothing recorded yet"} /> : null}
       </div>
       {list.data ? <Pager page={page} total={list.data.total} perPage={list.data.per_page} onPage={setPage} /> : null}
     </>

@@ -15,6 +15,8 @@ export const THEMES = [
   { id: "solarized", name: "Solarized", mode: "light", colors: ["#fdf6e3", "#fffbf0", "#f5eedc", "#e3dbc8", "#b3ab97", "#22303c", "#5a6b74", "#54666f", "#0f7b8a"] },
   { id: "contrast-light", name: "High Contrast Light", mode: "light", colors: ["#ffffff", "#ffffff", "#f0f0f0", "#767676", "#525252", "#000000", "#333333", "#595959", "#0b4fc4"] },
   { id: "lavender", name: "Lavender Mist", mode: "light", colors: ["#f7f6fc", "#ffffff", "#eeecf6", "#d6d2e8", "#9b95b8", "#241f3d", "#4a4470", "#5f5980", "#5b3fd6"] },
+  { id: "github-exact-dark", name: "GitHub 1:1 Dark", mode: "dark", colors: ["#0d1117", "#151b23", "#010409", "#3d444d", "#656c76", "#f0f6fc", "#9198a1", "#9198a1", "#4493f8"] },
+  { id: "github-exact-light", name: "GitHub 1:1 Light", mode: "light", colors: ["#ffffff", "#f6f8fa", "#f6f8fa", "#d1d9e0", "#818b98", "#1f2328", "#59636e", "#59636e", "#0969da"] },
   { id: "github-dimmed", name: "GitHub Dimmed", mode: "dark", colors: ["#212830", "#262c36", "#151b23", "#3d444d", "#656c76", "#d1d7e0", "#9198a1", "#9198a1", "#539bf5"] },
   { id: "dracula", name: "Dracula", mode: "dark", colors: ["#21222c", "#282a36", "#1d1e26", "#44475a", "#6272a4", "#f8f8f2", "#d6d6e3", "#b8bcd6", "#bd93f9"] },
   { id: "tokyo-night", name: "Tokyo Night", mode: "dark", colors: ["#16161e", "#1a1b26", "#13131a", "#292e42", "#3b4261", "#c0caf5", "#a9b1d6", "#9aa5ce", "#7aa2f7"] },
@@ -36,6 +38,8 @@ const GITHUB_DARK_STATUS = { "--success": "#3fb950", "--danger": "#f85149", "--w
 const GITHUB_LIGHT_STATUS = { "--success": "#1a7f37", "--danger": "#d1242f", "--warning": "#9a6700", "--merged": "#8250df" };
 const GITHUB_STATUS: Partial<Record<ThemeId, Record<string, string>>> = {
   "github-dark": GITHUB_DARK_STATUS,
+  "github-exact-dark": GITHUB_DARK_STATUS,
+  "github-exact-light": GITHUB_LIGHT_STATUS,
   "github-dimmed": { ...GITHUB_DARK_STATUS, "--success": "#57ab5a", "--danger": "#e5534b", "--warning": "#c69026", "--merged": "#986ee2" },
   "github-light": GITHUB_LIGHT_STATUS,
   "github-light-soft": GITHUB_LIGHT_STATUS,

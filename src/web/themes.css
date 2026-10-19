@@ -68,3 +68,15 @@ html[data-theme] a.header-notifications:hover, html[data-theme] a.header-notific
 html[data-theme] a.topic-chip { color: var(--link); background: color-mix(in srgb, var(--link) 12%, transparent); border-color: transparent; }
 html[data-theme] a.topic-chip:hover { color: var(--btn-primary-text); background: var(--link); border-color: transparent; }
 html[data-theme] a.markdown-ref, html[data-theme] .markdown-body a { color: var(--link); }
+html[data-theme^="github-exact"] { --radius: 6px; --radius-md: 6px; --radius-lg: 12px; }
+html[data-theme="github-exact-dark"] { --header-surface: #010409; --focus-blue: #1f6feb; }
+html[data-theme="github-exact-light"] { --header-surface: #f6f8fa; --focus-blue: #0969da; }
+html[data-theme^="github-exact"] .site-header { background: var(--header-surface); border-bottom-color: var(--border); }
+html[data-theme^="github-exact"] .repo-band::before { background: var(--header-surface); }
+html[data-theme^="github-exact"] body:has(.repo-band) .site-header { border-bottom-color: transparent; }
+html[data-theme^="github-exact"] .card { background: var(--bg); }
+html[data-theme^="github-exact"] :is(input, select, textarea) { background-color: var(--bg); border-color: var(--border); }
+html[data-theme^="github-exact"] :is(input, select, textarea):hover:not(:disabled) { border-color: var(--border); }
+html[data-theme^="github-exact"] :is(input, select, textarea):focus-visible { border-color: var(--focus-blue); box-shadow: inset 0 0 0 1px var(--focus-blue); outline: none; }
+html[data-theme^="github-exact"] .header-search input { background-color: transparent; }
+html[data-theme^="github-exact"] .admin-table th, html[data-theme^="github-exact"] .markdown-body th { background: var(--bg-elevated); }

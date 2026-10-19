@@ -22,6 +22,7 @@ import { notFound, unauthorized } from "../../lib/errors.ts";
 import { json, readJson } from "../../lib/http.ts";
 import * as v from "../../lib/validate.ts";
 import { param, positiveId } from "../helpers.ts";
+import { recordAudit } from "../../data/audit.ts";
 import type { RouteContext, Router } from "../router.ts";
 
 export const RUNNER_STEP_TIMEOUT_MS = 60 * 60_000;
@@ -57,20 +58,24 @@ export function registerRunnerRoutes(router: Router): void {
     const admin = requireInstanceAdmin(ctx.auth, true);
     const body = await readJson(ctx.request, createSchema);
     const created = createRunner(body.name, admin.userId);
+    recordAudit(admin, "runner.register", body.name, `id ${created.runner.id}`, ctx.ip);
     return json({ runner: created.runner, token: created.token }, { status: 201 });
   });
 
   router.patch("/api/admin/runners/:id", async (ctx) => {
-    requireInstanceAdmin(ctx.auth, true);
+    const admin = requireInstanceAdmin(ctx.auth, true);
     const body = await readJson(ctx.request, pauseSchema);
     const runner = setRunnerPaused(positiveId(param(ctx, "id")), body.paused);
     if (!runner) throw notFound("Runner not found");
+    recordAudit(admin, body.paused ? "runner.pause" : "runner.resume", runner.name, "", ctx.ip);
     return json({ runner });
   });
 
   router.delete("/api/admin/runners/:id", (ctx) => {
-    requireInstanceAdmin(ctx.auth, true);
-    if (!deleteRunner(positiveId(param(ctx, "id")))) throw notFound("Runner not found");
+    const admin = requireInstanceAdmin(ctx.auth, true);
+    const id = positiveId(param(ctx, "id"));
+    if (!deleteRunner(id)) throw notFound("Runner not found");
+    recordAudit(admin, "runner.remove", `#${id}`, "", ctx.ip);
     return new Response(null, { status: 204 });
   });
 

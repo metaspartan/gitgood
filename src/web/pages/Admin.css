@@ -23,7 +23,7 @@ a.admin-stat:hover { border-color: var(--border-strong); text-decoration: none; 
 .admin-card-title { margin: 0; font-size: 16px; font-weight: 600; }
 .admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
 .admin-toolbar input[type="search"] { flex: 1; min-width: 220px; height: 32px; }
-.admin-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); overflow-x: auto; }
+.admin-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .admin-table th { padding: var(--s2) var(--s4); text-align: left; font-size: 12px; font-weight: 600; color: var(--text-dim); background: var(--bg-inset); border-bottom: 1px solid var(--border); white-space: nowrap; }
 .admin-table td { padding: 10px var(--s4); border-top: 1px solid var(--border); vertical-align: middle; }
@@ -37,7 +37,8 @@ a.admin-stat:hover { border-color: var(--border-strong); text-decoration: none; 
 html[data-theme] a.admin-user-name, a.admin-user-name { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 600; }
 html[data-theme] a.admin-user-name:hover, a.admin-user-name:hover { color: var(--link, var(--accent)); }
 .admin-badge { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: transparent; }
-.admin-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; white-space: nowrap; }
+.admin-table td.admin-actions { text-align: right; white-space: nowrap; }
+.admin-actions .btn-group { vertical-align: middle; }
 .btn-secondary.small { min-height: 28px; padding: 0 10px; font-size: 12px; }
 .danger-text { color: var(--danger) !important; }
 .admin-pager { display: flex; align-items: center; justify-content: center; gap: var(--s3); }
@@ -53,6 +54,7 @@ html[data-theme] a.admin-user-name:hover, a.admin-user-name:hover { color: var(-
 .runner-dot.is-offline { background: var(--text-faint); }
 .runner-dot.is-paused { background: var(--warning); }
 @media (max-width: 900px) {
+  .admin-table-wrap { overflow-x: auto; }
   .admin-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
   .admin-nav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
   .admin-nav-title { display: none; }
@@ -60,3 +62,12 @@ html[data-theme] a.admin-user-name:hover, a.admin-user-name:hover { color: var(-
   .admin-nav a.active::before { left: 8px; right: 8px; top: auto; bottom: -2px; width: auto; height: 3px; }
   .admin-table .hide-narrow { display: none; }
 }
+.audit-action { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: var(--counter-bg, var(--bg-inset)); }
+.admin-actions .btn-group .action-menu { right: 0; width: 280px; }
+.admin-actions .icon-only .icon { stroke-width: 2.5; }
+.action-menu-item:disabled { opacity: .5; cursor: not-allowed; background: none; }
+.admin-table tbody tr:last-child td:first-child { border-bottom-left-radius: var(--radius); }
+.admin-table thead th:first-child { border-top-left-radius: var(--radius); }
+.admin-table thead th:last-child { border-top-right-radius: var(--radius); }
+.admin-table tbody tr:last-child td:last-child { border-bottom-right-radius: var(--radius); }
+.action-menu.opens-up { top: auto; bottom: calc(100% + 4px); }

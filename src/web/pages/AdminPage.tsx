@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AdminLayout, AdminOverview, AdminRepositories, AdminRunners, AdminSettings, AdminUsers, adminSectionFor } from "./Admin.tsx";
+import { AdminAudit, AdminLayout, AdminOverview, AdminRepositories, AdminRunners, AdminSettings, AdminUsers, adminSectionFor } from "./Admin.tsx";
 
 export function AdminPage({ section, configuration, backups }: { section: string | undefined; configuration: ReactNode; backups: ReactNode }): ReactNode {
   const resolved = adminSectionFor(section);
@@ -16,6 +16,7 @@ export function AdminPage({ section, configuration, backups }: { section: string
     : resolved === "repositories" ? <AdminRepositories />
     : resolved === "runners" ? <AdminRunners />
     : resolved === "settings" ? <AdminSettings />
+    : resolved === "audit" ? <AdminAudit />
     : resolved === "configuration" ? configuration
     : backups;
   return <AdminLayout section={resolved}>{body}</AdminLayout>;
