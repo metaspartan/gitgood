@@ -144,6 +144,9 @@ export function DiffView({
     return <p className="faint small">{emptyLabel}</p>;
   }
 
+  const [indexFilter, setIndexFilter] = useState("");
+  const hasIndex = diff.files.length > DIFF_FILE_INDEX_THRESHOLD;
+
   const expandPath = (path: string, focus: boolean): void => {
     setCollapsed((current) => {
       const next = new Set(current);
@@ -167,13 +170,13 @@ export function DiffView({
   };
 
   return (
-    <div className="diff">
+    <div className={`diff${hasIndex ? " has-index" : ""}`}>
       <div className="row wrap diff-summary">
-        <span className="small faint">
-          {diff.files.length.toLocaleString()} {diff.files.length === 1 ? "file" : "files"} changed
+        <span className="small diff-summary-text">
+          Showing <strong>{diff.files.length.toLocaleString()} changed {diff.files.length === 1 ? "file" : "files"}</strong> with{" "}
+          <span className="stat-add">{diff.additions.toLocaleString()} {diff.additions === 1 ? "addition" : "additions"}</span> and{" "}
+          <span className="stat-del">{diff.deletions.toLocaleString()} {diff.deletions === 1 ? "deletion" : "deletions"}</span>
         </span>
-        <span className="stat-add small">+{diff.additions.toLocaleString()}</span>
-        <span className="stat-del small">−{diff.deletions.toLocaleString()}</span>
         <span className="spacer" />
         {large ? (
           <button
@@ -201,24 +204,49 @@ export function DiffView({
         </button>
       </div>
 
-      {diff.files.length > DIFF_FILE_INDEX_THRESHOLD ? (
-        <ol className="diff-file-index">
-          {prepared.map(({ file }) => (
-            <li key={file.path}>
-              <button
-                type="button"
-                className="diff-index-link mono"
-                onClick={() => expandPath(file.path, true)}
-                title={file.path}
-              >
-                <span className={`badge diff-status-${file.status}`}>{STATUS_LABEL[file.status]}</span>
-                <span className="mono">{file.path}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+      {hasIndex ? (
+        <nav className="diff-file-index" aria-label="Changed files">
+          <input
+            type="search"
+            className="diff-index-filter"
+            placeholder="Filter files…"
+            aria-label="Filter changed files"
+            value={indexFilter}
+            onChange={(event) => setIndexFilter(event.target.value)}
+          />
+          <ol>
+            {prepared
+              .filter(({ file }) => !indexFilter.trim() || file.path.toLowerCase().includes(indexFilter.trim().toLowerCase()))
+              .map(({ file }) => {
+                const slash = file.path.lastIndexOf("/");
+                return (
+                  <li key={file.path}>
+                    <button
+                      type="button"
+                      className={`diff-index-link${focusPath === file.path ? " is-current" : ""}`}
+                      onClick={() => expandPath(file.path, true)}
+                      title={file.path}
+                      aria-current={focusPath === file.path ? "true" : undefined}
+                    >
+                      <span className={`diff-index-status diff-status-${file.status}`} aria-label={STATUS_LABEL[file.status]}>{STATUS_LABEL[file.status].slice(0, 1).toUpperCase()}</span>
+                      <span className="diff-index-path">
+                        <span className="diff-index-name">{file.path.slice(slash + 1)}</span>
+                        {slash > 0 ? <span className="diff-index-dir">{file.path.slice(0, slash)}</span> : null}
+                      </span>
+                      {file.binary ? null : (
+                        <span className="diff-index-stats small">
+                          <span className="stat-add">+{file.additions}</span> <span className="stat-del">−{file.deletions}</span>
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+          </ol>
+        </nav>
       ) : null}
 
+      <div className="diff-main">
       {diff.truncated ? (
         <div className="notice-banner small">
           This diff was truncated by the server's size budget. Open the file locally for the complete
@@ -358,6 +386,7 @@ export function DiffView({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

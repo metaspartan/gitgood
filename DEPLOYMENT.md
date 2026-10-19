@@ -559,9 +559,9 @@ the pre-upgrade backup is step one.
 
 Instance administrators manage backups at **Admin area → Backups** (`/admin/backups`):
 
-- **Destinations**: add, edit, test and remove local folders, mounted NAS shares
-  and rclone Google Drive remotes. **Test** checks that the destination is
-  writable, reports free space, and for Drive confirms the rclone remote answers.
+- **Destinations**: add, edit, test and remove local folders, mounted NAS shares,
+  Google Drive (sign in with Google) and rclone remotes. **Test** checks that the
+  destination is writable and reports free space.
 - **Schedules**: manual, daily or weekly at a chosen hour (UTC). The server checks
   once a minute and runs at most one backup at a time; a run missed while the
   server was down starts once when it comes back.
@@ -578,7 +578,7 @@ their location is not shown in the browser and only their schedule and retention
 can be changed there.
 
 ```json
-[{"id":"local","name":"Recovery disk","kind":"local","target":"/backups/gitgood"},{"id":"nas","name":"Office NAS","kind":"nas","target":"/mnt/nas/gitgood"},{"id":"drive","name":"Off-site archive","kind":"google-drive","target":"drive:GitGood"}]
+[{"id":"local","name":"Recovery disk","kind":"local","target":"/backups/gitgood"},{"id":"nas","name":"Office NAS","kind":"nas","target":"/mnt/nas/gitgood"},{"id":"offsite","name":"Off-site archive","kind":"rclone","target":"b2:gitgood-backups"}]
 ```
 
 Paths must be absolute. On Windows use paths such as `D:/Backups/GitGood` or a UNC
@@ -588,14 +588,48 @@ mounted, so use **Test**. Container deployments must bind-mount the destination.
 Destinations and staging must be outside GitGood's data, repository and LFS
 directories, including symlink targets; the worker refuses them.
 
-For Google Drive, install **rclone in the server runtime** (not bundled in the
-stock image), run `rclone config` under the service identity to authorise a Drive
-remote, and protect its configuration file. `RCLONE_CONFIG` can point to a mounted
-configuration file; `GITGOOD_RCLONE_BIN` can specify the executable.
-`GITGOOD_BACKUP_STAGING` defaults to `./backups`; use a disk with room for a full
-copy. Each run is staged locally, then `rclone copy` and `rclone check` run, each with
-a one-hour deadline. Cloud failures keep the local copy. Backups are not encrypted
-by GitGood; use disk encryption or an rclone crypt remote and keep its keys elsewhere.
+### Google Drive
+
+Google Drive backups need no extra software. In **Admin → Backups → Google Drive**:
+
+1. **One-time OAuth client.** In Google Cloud Console enable the *Google Drive API*,
+   configure the *Google Auth Platform* consent screen (add your account as a test user
+   or publish the app), and create an OAuth client of type **TVs and Limited Input
+   devices**. Paste its client ID and secret into the admin page, or set
+   `GITGOOD_GOOGLE_CLIENT_ID` and `GITGOOD_GOOGLE_CLIENT_SECRET`. The admin page
+   links to each console screen.
+2. **Sign in with Google.** Click the button, open `google.com/device`, enter the code
+   shown and pick the account. GitGood never sees the Google password. The link uses
+   Google's device flow, so it works on LAN and HTTP-only installs without a public
+   redirect URL.
+3. **Add a Google Drive destination**, choosing the account and a folder name in My
+   Drive (created if missing). **Test** reports the account and free space.
+
+GitGood requests only the `drive.file` scope: it can see and delete files it created,
+nothing else in the Drive. Each run snapshots locally to `GITGOOD_BACKUP_STAGING`
+(default `./backups`; needs room for one full copy), streams a single `.tar` archive to
+Drive with a resumable upload (8 MiB chunks, automatic retries, token refresh), checks
+the size and MD5 that Google reports, and removes the staging copy. Retention deletes
+older archives from Drive. Disconnecting an account revokes GitGood's access; files
+already uploaded stay in Drive.
+
+The OAuth client secret and refresh tokens are stored encrypted (AES-256-GCM) with a key
+from `GITGOOD_SECRET_KEY`, or a random key generated at `<data dir>/secret.key` on first
+use. Back that key up separately: database backups alone cannot decrypt the Google
+credentials, which is intentional. If the key is lost, sign in with Google again.
+
+### Other cloud storage (rclone)
+
+For S3, Backblaze B2, SFTP and anything else rclone supports, choose **rclone remote
+(advanced)**. Install rclone in the server runtime (not in the stock image), configure the
+remote with `rclone config` under the service identity, and use `remote:path` as the
+target. `RCLONE_CONFIG` and `GITGOOD_RCLONE_BIN` are honoured. Each run is staged
+locally, then `rclone copy` and `rclone check` run with a one-hour deadline each; failures
+keep the local copy. Existing destinations that used a `drive:` rclone remote keep
+working as rclone destinations.
+
+Backups are not encrypted by GitGood; use disk encryption or an rclone crypt remote and keep
+its keys elsewhere.
 
 The worker runs as a separate process so copying never blocks the web server. Run a
 single application process per data directory; schedules are not coordinated

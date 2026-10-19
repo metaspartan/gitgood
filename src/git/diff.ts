@@ -58,6 +58,8 @@ export function parseUnifiedDiff(output: string, options: ParseDiffOptions = {})
 
   let current: DiffFile | null = null;
   let currentHunk: DiffHunk | null = null;
+  let oldCursor = 0;
+  let newCursor = 0;
   let fileLines = 0;
 
   const closeHunk = (): void => {
@@ -140,6 +142,8 @@ export function parseUnifiedDiff(output: string, options: ParseDiffOptions = {})
         newStart: Number.parseInt(hunkHeader[2] ?? "0", 10),
         lines: [],
       };
+      oldCursor = currentHunk.oldStart;
+      newCursor = currentHunk.newStart;
       continue;
     }
 
@@ -151,24 +155,28 @@ export function parseUnifiedDiff(output: string, options: ParseDiffOptions = {})
         kind: "add",
         text: line.slice(1),
         oldLine: null,
-        newLine: currentHunk.newStart + current.additions,
+        newLine: newCursor,
       });
+      newCursor += 1;
       current.additions += 1;
     } else if (marker === "-") {
       currentHunk.lines.push({
         kind: "del",
         text: line.slice(1),
-        oldLine: currentHunk.oldStart + current.deletions,
+        oldLine: oldCursor,
         newLine: null,
       });
+      oldCursor += 1;
       current.deletions += 1;
     } else if (marker === " ") {
       currentHunk.lines.push({
         kind: "context",
         text: line.slice(1),
-        oldLine: currentHunk.oldStart + current.deletions,
-        newLine: currentHunk.newStart + current.additions,
+        oldLine: oldCursor,
+        newLine: newCursor,
       });
+      oldCursor += 1;
+      newCursor += 1;
     } else {
       continue;
     }

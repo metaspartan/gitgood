@@ -51,6 +51,8 @@ import type {
   BackupDestinationInfo,
   BackupJobInfo,
   BackupDestinationInput,
+  GoogleBackupState,
+  GoogleDriveAccount,
 } from "./types.ts";
 
 export class ApiError extends Error {
@@ -143,7 +145,14 @@ function encodeRepo(owner: string, name: string): string {
 export const api = {
   configuration: (signal?: AbortSignal) => request<{ configuration: InstanceConfiguration }>("/api/admin/configuration", { signal }),
   backups: (signal?: AbortSignal) =>
-    request<{ destinations: BackupDestinationInfo[]; jobs: BackupJobInfo[]; active: boolean; timezone: string; max_destinations: number }>("/api/admin/backups", { signal }),
+    request<{ destinations: BackupDestinationInfo[]; jobs: BackupJobInfo[]; active: boolean; timezone: string; max_destinations: number; google: GoogleBackupState }>("/api/admin/backups", { signal }),
+  saveGoogleClient: (clientId: string, clientSecret: string) => put<GoogleBackupState>("/api/admin/backups/google/client", { client_id: clientId, client_secret: clientSecret }),
+  removeGoogleClient: () => del<GoogleBackupState>("/api/admin/backups/google/client"),
+  startGoogleConnect: () => post<{ session: string; user_code: string; verification_url: string; expires_at: number; interval: number }>("/api/admin/backups/google/connect", {}),
+  pollGoogleConnect: (session: string) =>
+    post<{ state: "pending" | "denied" | "expired" | "connected"; retry_after?: number; account?: GoogleDriveAccount }>(`/api/admin/backups/google/connect/${encodeURIComponent(session)}`, {}),
+  cancelGoogleConnect: (session: string) => request<null>(`/api/admin/backups/google/connect/${encodeURIComponent(session)}`, { method: "DELETE" }),
+  disconnectGoogleAccount: (id: number) => del<GoogleBackupState>(`/api/admin/backups/google/accounts/${id}`),
   startBackup: (destination: string) => post<{ id: string }>("/api/admin/backups", { destination }),
   createBackupDestination: (input: BackupDestinationInput) => post<BackupDestinationInfo>("/api/admin/backups/destinations", input),
   updateBackupDestination: (id: string, input: Partial<BackupDestinationInput>) => patch<BackupDestinationInfo>(`/api/admin/backups/destinations/${encodeURIComponent(id)}`, input),

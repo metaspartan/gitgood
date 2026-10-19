@@ -46,6 +46,8 @@ import { listLocks } from "../../lfs/locks.ts";
 import * as gitRepo from "../../git/repo.ts";
 import { assertDirectBranchWriteAllowed } from "../../data/branch-protection.ts";
 import * as gitReads from "../../data/git-reads.ts";
+import { linkedAuthors } from "../../data/user-emails.ts";
+import { refsContaining } from "../../git/refs-containing.ts";
 import { BLAME_MAX_LINES, mergePatchMetadata, parseBlamePorcelain, parseUnifiedDiff } from "../../git/diff.ts";
 import { countAheadBehind } from "../../git/ahead-behind.ts";
 import {
@@ -289,8 +291,10 @@ export function registerRepoRoutes(router: Router): void {
       ...(filePath ? { filePath } : {}),
     });
     observe("git_log_ms", performance.now() - started);
+    const shown = commits.slice(0, page.perPage);
+    const authors = linkedAuthors(shown.map((commit) => commit.authorEmail));
     return json({
-      items: commits.slice(0, page.perPage).map(commitJson),
+      items: shown.map((commit) => commitJson(commit, authors)),
       page: page.page,
       per_page: page.perPage,
       has_more: commits.length > page.perPage,
@@ -312,7 +316,8 @@ export function registerRepoRoutes(router: Router): void {
     const repo = loadReadableRepo(ctx);
     const detail = await gitReads.commitDetail(repo, revParam(ctx, "sha"));
     if (!detail) throw notFound("Commit not found");
-    return json(commitJson(detail));
+    const refs = await refsContaining(repoDiskPath(repo), detail.sha);
+    return json({ ...commitJson(detail, linkedAuthors([detail.authorEmail])), refs });
   });
 
   router.get("/api/repos/:owner/:name/commits/:sha/diff", async (ctx) => {

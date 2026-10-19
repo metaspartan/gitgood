@@ -124,7 +124,7 @@ Each job runs in a fresh container (memory, CPU and PID limits, `no-new-privileg
 - **Security**: Argon2id passwords, TOTP and passkeys (password-only Git/API access is refused once two-factor is on), scoped and repository-pinned tokens, per-account and per-IP login throttling, strict CSP, CSRF protection, masked 404s for private resources, blocked-user enforcement across web, API, Git and SSH.
 - **Administration**: GitLab-style admin area with user search, roles, blocking, sign-out-everywhere and two-factor reset, runner management, instance settings and a searchable audit log of every administrative change.
 - **Account**: profile, password, TOTP with recovery codes, passkeys, scoped access tokens, per-browser themes and an active-sessions list with one-click revoke, commit emails (with suggestions from your repositories) and an option to count private contributions on your profile.
-- **Operations**: scheduled backups with retention to local, NAS or Google Drive destinations, managed and tested from the admin area, storage quotas, readiness/health endpoints, Prometheus-style metrics, structured logs.
+- **Operations**: scheduled backups with retention to local, NAS or Google Drive (sign in with Google, no extra software) destinations, managed and tested from the admin area, storage quotas, readiness/health endpoints, Prometheus-style metrics, structured logs.
 
 ## Configuration
 

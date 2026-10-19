@@ -336,12 +336,13 @@ export function tagJson(tag: GitTag): Record<string, unknown> {
   return { name: tag.name, sha: tag.sha };
 }
 
-export function commitJson(commit: GitCommit | GitCommitDetail): Record<string, unknown> {
+export function commitJson(commit: GitCommit | GitCommitDetail, authors?: ReadonlyMap<string, { username: string; avatar_hue: number }>): Record<string, unknown> {
+  const linked = authors?.get(commit.authorEmail.toLowerCase());
   const base: Record<string, unknown> = {
     sha: commit.sha,
     short_sha: commit.shortSha,
     message: commit.subject,
-    author: { name: commit.authorName, email: commit.authorEmail },
+    author: { name: commit.authorName, email: commit.authorEmail, ...(linked ? { username: linked.username, avatar_hue: linked.avatar_hue } : {}) },
     authored_at: commit.authoredAt,
     parents: commit.parents,
   };

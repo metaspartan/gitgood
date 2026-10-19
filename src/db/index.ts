@@ -160,6 +160,22 @@ export function migrate(): void {
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_backup_jobs_started ON backup_jobs(started_at DESC)");
   db.exec("CREATE TABLE IF NOT EXISTS backup_env_schedules (id TEXT PRIMARY KEY, schedule TEXT NOT NULL, hour INTEGER NOT NULL, weekday INTEGER NOT NULL, keep INTEGER NOT NULL, last_scheduled_at INTEGER)");
+  addColumnIfMissing("backup_destinations", "google_account_id", "INTEGER");
+  db.exec(`CREATE TABLE IF NOT EXISTS google_oauth_client (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    client_id TEXT NOT NULL,
+    client_secret TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS google_drive_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    refresh_token TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("UPDATE backup_destinations SET kind = 'rclone' WHERE kind = 'google-drive' AND google_account_id IS NULL");
   addColumnIfMissing("ci_runners", "scope", "TEXT NOT NULL DEFAULT 'instance'");
   addColumnIfMissing("ci_runners", "owner_user_id", "INTEGER REFERENCES users(id) ON DELETE CASCADE");
   addColumnIfMissing("ci_runners", "repo_id", "INTEGER REFERENCES repos(id) ON DELETE CASCADE");

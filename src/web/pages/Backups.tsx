@@ -5,11 +5,12 @@ import { api } from "../api.ts";
 import { copyText } from "../clipboard.ts";
 import { EmptyState, ErrorBanner, formatBytes, timeAgo } from "../components.tsx";
 import { Icon } from "../components/Icons.tsx";
-import type { BackupDestinationInfo, BackupDestinationInput, BackupJobInfo, BackupKind, BackupSchedule } from "../types.ts";
+import type { BackupDestinationInfo, BackupDestinationInput, BackupJobInfo, BackupKind, BackupSchedule, GoogleDriveAccount } from "../types.ts";
+import { GoogleDrivePanel } from "../components/GoogleDrivePanel.tsx";
 import { useLive } from "../use-live.ts";
 
-const KIND_LABELS: Record<BackupKind, string> = { local: "Local folder", nas: "NAS / network mount", "google-drive": "Google Drive (rclone)" };
-const KIND_PLACEHOLDERS: Record<BackupKind, string> = { local: "/var/backups/gitgood", nas: "/mnt/nas/gitgood", "google-drive": "drive:GitGood" };
+const KIND_LABELS: Record<BackupKind, string> = { local: "Local folder", nas: "NAS / network mount", "google-drive": "Google Drive", rclone: "rclone remote (advanced)" };
+const KIND_PLACEHOLDERS: Record<BackupKind, string> = { local: "/var/backups/gitgood", nas: "/mnt/nas/gitgood", "google-drive": "GitGood Backups", rclone: "s3:bucket/gitgood" };
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function shortJobId(id: string): string {
@@ -45,9 +46,10 @@ function StateBadge({ state }: { state: BackupJobInfo["state"] }): ReactNode {
 
 const EMPTY_FORM: BackupDestinationInput = { id: "", name: "", kind: "local", target: "", schedule: "daily", hour: 3, weekday: 0, keep: 7 };
 
-function DestinationForm({ initial, editing, onSaved, onCancel }: {
+function DestinationForm({ initial, editing, accounts, onSaved, onCancel }: {
   initial: BackupDestinationInput;
   editing: BackupDestinationInfo | null;
+  accounts: GoogleDriveAccount[];
   onSaved: () => void;
   onCancel: () => void;
 }): ReactNode {
@@ -94,17 +96,43 @@ function DestinationForm({ initial, editing, onSaved, onCancel }: {
         </label>
         <label>
           Type
-          <select value={form.kind} disabled={managed} onChange={(e) => set("kind", e.target.value as BackupKind)}>
+          <select
+            value={form.kind}
+            disabled={managed}
+            onChange={(e) => {
+              const kind = e.target.value as BackupKind;
+              setForm((current) => ({
+                ...current,
+                kind,
+                target: kind === "google-drive" && !current.target ? KIND_PLACEHOLDERS["google-drive"] : current.target,
+                account_id: kind === "google-drive" ? current.account_id ?? accounts[0]?.id ?? null : null,
+              }));
+            }}
+          >
             {(Object.keys(KIND_LABELS) as BackupKind[]).map((kind) => <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>)}
           </select>
         </label>
+        {!managed && form.kind === "google-drive" ? (
+          <label>
+            Google account
+            {accounts.length ? (
+              <select required value={form.account_id ?? ""} onChange={(e) => set("account_id", Number(e.target.value))}>
+                {accounts.map((account) => <option key={account.id} value={account.id}>{account.email}</option>)}
+              </select>
+            ) : (
+              <span className="small danger">Sign in with Google in the Google Drive section first.</span>
+            )}
+          </label>
+        ) : null}
         {managed ? null : (
           <label className="backup-form-wide">
-            {form.kind === "google-drive" ? "rclone remote and folder" : "Absolute path on the server"}
+            {form.kind === "google-drive" ? "Folder in My Drive" : form.kind === "rclone" ? "rclone remote and folder" : "Absolute path on the server"}
             <input required maxLength={1024} value={form.target} className="mono" placeholder={KIND_PLACEHOLDERS[form.kind]} onChange={(e) => set("target", e.target.value)} />
             <span className="small faint">
               {form.kind === "google-drive"
-                ? "Configure the remote once with rclone config on the server. Backups are staged locally, copied, then verified."
+                ? "Created in the account’s My Drive if it does not exist. Each backup is uploaded as one .tar archive and checked after upload."
+                : form.kind === "rclone"
+                ? "For S3, B2, SFTP and other rclone remotes configured on the server with rclone config. Backups are staged locally, copied, then verified."
                 : form.kind === "nas"
                   ? "The share must already be mounted. GitGood will not create the mount point."
                   : "Created if missing. Must be outside GitGood's own data directories."}
@@ -169,14 +197,16 @@ function DestinationCard({ destination, active, onEdit, onChanged, onError }: {
 
   return (
     <li className="backup-destination">
-      <div className="backup-destination-icon"><Icon name={destination.kind === "google-drive" ? "download" : "database"} /></div>
+      <div className="backup-destination-icon"><Icon name={destination.kind === "google-drive" || destination.kind === "rclone" ? "download" : "database"} /></div>
       <div className="backup-destination-body">
         <div className="backup-destination-title">
           <strong>{destination.name}</strong>
           <span className="badge">{KIND_LABELS[destination.kind]}</span>
           {destination.source === "environment" ? <span className="badge">Server environment</span> : null}
         </div>
-        {destination.target ? <div className="small mono muted backup-target">{destination.target}</div> : null}
+        {destination.kind === "google-drive" ? (
+          <div className="small muted backup-target">{destination.account_email ?? "Disconnected account"} · My Drive / {destination.target}</div>
+        ) : destination.target ? <div className="small mono muted backup-target">{destination.target}</div> : null}
         <div className="small muted">{scheduleSummary(destination)}{destination.next_run_at ? ` · next ${new Date(destination.next_run_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}` : ""}</div>
         <div className="small">
           {destination.last_job ? (
@@ -241,7 +271,7 @@ export function BackupsPage(): ReactNode {
         ) : null}
       </div>
       <p className="muted admin-lede">
-        Each backup captures the database, every repository, Git LFS objects and release assets. Schedule copies to a local disk, a NAS or Google Drive, and keep a set number of them.
+        Each backup captures the database, every repository, Git LFS objects and release assets. Schedule copies to a local disk, a NAS or your Google Drive, and keep a set number of them.
       </p>
       <div className="admin-stats backup-stats">
         <div className="admin-stat"><div className="admin-stat-label">Last successful backup</div><div className="admin-stat-value">{latestOk ? timeAgo(latestOk.finished_at ?? latestOk.started_at) : "–"}</div><div className="admin-stat-sub">{latestOk ? `${latestOk.destination_name} · ${latestOk.bytes ? formatBytes(latestOk.bytes) : "size unknown"}` : "\u00a0"}</div></div>
@@ -252,8 +282,9 @@ export function BackupsPage(): ReactNode {
       {formFor !== null ? (
         <DestinationForm
           key={formFor === "new" ? "new" : formFor.id}
-          initial={formFor === "new" ? EMPTY_FORM : { id: formFor.id, name: formFor.name, kind: formFor.kind, target: formFor.target ?? "", schedule: formFor.schedule, hour: formFor.hour, weekday: formFor.weekday, keep: formFor.keep }}
+          initial={formFor === "new" ? EMPTY_FORM : { id: formFor.id, name: formFor.name, kind: formFor.kind, target: formFor.target ?? "", account_id: formFor.account_id ?? null, schedule: formFor.schedule, hour: formFor.hour, weekday: formFor.weekday, keep: formFor.keep }}
           editing={formFor === "new" ? null : formFor}
+          accounts={data?.google.accounts ?? []}
           onCancel={() => setFormFor(null)}
           onSaved={() => { setFormFor(null); state.reload(); }}
         />
@@ -261,7 +292,7 @@ export function BackupsPage(): ReactNode {
       <section className="card admin-card" aria-labelledby="backup-destinations-title">
         <h2 id="backup-destinations-title" className="admin-card-title">Destinations</h2>
         {data && data.destinations.length === 0 ? (
-          <EmptyState title="No destinations yet" hint="Add a local folder, a mounted NAS share or an rclone Google Drive remote to start backing up." />
+          <EmptyState title="No destinations yet" hint="Add a local folder or a mounted NAS share, or sign in with Google below to back up to Drive." />
         ) : (
           <ul className="backup-destinations" aria-busy={state.loading}>
             {(data?.destinations ?? []).map((destination) => (
@@ -278,6 +309,7 @@ export function BackupsPage(): ReactNode {
           </ul>
         )}
       </section>
+      <GoogleDrivePanel state={data?.google} onChanged={state.reload} />
       <section className="card admin-card" aria-labelledby="backup-history-title">
         <h2 id="backup-history-title" className="admin-card-title">History</h2>
         {data && data.jobs.length === 0 ? <p className="small muted" style={{ margin: 0 }}>No backups have run yet.</p> : (
@@ -293,7 +325,9 @@ export function BackupsPage(): ReactNode {
                     <td className="num small">{job.bytes ? formatBytes(job.bytes) : "–"}</td>
                     <td className="small muted hide-narrow">{duration(job)}</td>
                     <td className="small hide-narrow">
-                      {job.location && !job.pruned ? (
+                      {job.location && !job.pruned && job.location.startsWith("https://drive.google.com/") ? (
+                        <a className="small" href={job.location} target="_blank" rel="noopener noreferrer">Open in Drive <Icon name="external" /></a>
+                      ) : job.location && !job.pruned ? (
                         <button type="button" className="ghost small mono backup-location" title={`Copy ${job.location}`} onClick={() => void copyText(job.location!)}>{shortJobId(job.id)} <Icon name="copy" /></button>
                       ) : "–"}
                     </td>

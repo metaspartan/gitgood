@@ -29,6 +29,7 @@ import { commentJson, commitJson, fileChangeJson, pullJson, pullSummaryJson } fr
 import { loadReadableRepo, loadWritableRepo, positiveIntParam } from "../helpers.ts";
 import type { RouteContext, Router } from "../router.ts";
 import { commentsWithReactions } from "./comment-actions.ts";
+import { linkedAuthors } from "../../data/user-emails.ts";
 
 const createPullSchema = v.strictObject({
   title: v.string({ min: 1, max: 256 }),
@@ -257,7 +258,8 @@ export function registerPullRoutes(router: Router): void {
       pull.head_ref,
       250,
     );
-    return json({ items: commits.map(commitJson) });
+    const authors = linkedAuthors(commits.map((commit) => commit.authorEmail));
+    return json({ items: commits.map((commit) => commitJson(commit, authors)) });
   });
 
   router.get("/api/repos/:owner/:name/pulls/:number/files", async (ctx) => {

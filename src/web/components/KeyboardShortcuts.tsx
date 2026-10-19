@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { navigate, useLocation } from "../router.tsx";
+import { SHORTCUTS_EVENT } from "./SiteFooter.tsx";
 
 const RESERVED = new Set(["admin", "login", "new", "notifications", "orgs", "search", "settings", "signup", "explore"]);
 
@@ -56,6 +57,8 @@ export function KeyboardShortcuts(): ReactNode {
       pendingRef.current = value;
       setPending(value);
     };
+    const onOpen = (): void => setHelpOpen(true);
+    window.addEventListener(SHORTCUTS_EVENT, onOpen);
     const onKey = (event: KeyboardEvent): void => {
       if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
       if (event.key === "Escape") {
@@ -89,6 +92,7 @@ export function KeyboardShortcuts(): ReactNode {
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
+    window.removeEventListener(SHORTCUTS_EVENT, onOpen);
       if (pendingTimer.current) clearTimeout(pendingTimer.current);
     };
   }, []);

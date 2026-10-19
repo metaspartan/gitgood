@@ -7,6 +7,7 @@ import type { User } from "./types.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { LoginPage } from "./pages/Auth.tsx";
 import { KeyboardShortcuts } from "./components/KeyboardShortcuts.tsx";
+import { SiteFooter } from "./components/SiteFooter.tsx";
 
 const { RepoPage, RepoShell } = {
   RepoPage: lazy(() => import("./pages/Repo.tsx").then((m) => ({ default: m.RepoPage }))),
@@ -159,15 +160,7 @@ export function App(): ReactNode {
           )}
         </main>
         <KeyboardShortcuts />
-        <footer className="site-footer">
-          <div className="footer-inner">
-            <span>GitGood — Git over the smart HTTP protocol</span>
-            <span className="spacer" />
-            <a href="/api/health">Status</a>
-            <a href="/api/version">Version</a>
-            <a href="/api/metrics">Metrics</a>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </SessionContext.Provider>
   );

@@ -18,6 +18,27 @@ export function allCommitEmails(user: { id: number; email: string }): string[] {
   });
 }
 
+export interface LinkedAuthor {
+  username: string;
+  avatar_hue: number;
+}
+
+export function linkedAuthors(emails: readonly string[]): Map<string, LinkedAuthor> {
+  const unique = [...new Set(emails.filter((email) => email.includes("@")).map((email) => email.toLowerCase()))].slice(0, 500);
+  const result = new Map<string, LinkedAuthor>();
+  if (unique.length === 0) return result;
+  const placeholders = unique.map(() => "?").join(",");
+  const rows = all<{ email: string; username: string; avatar_hue: number }>(
+    `SELECT lower(u.email) AS email, u.username, u.avatar_hue FROM users u WHERE lower(u.email) IN (${placeholders}) AND u.blocked_at IS NULL
+     UNION ALL
+     SELECT lower(e.email), u.username, u.avatar_hue FROM user_emails e JOIN users u ON u.id = e.user_id WHERE lower(e.email) IN (${placeholders}) AND u.blocked_at IS NULL`,
+    ...unique,
+    ...unique,
+  );
+  for (const row of rows) if (!result.has(row.email)) result.set(row.email, { username: row.username, avatar_hue: row.avatar_hue });
+  return result;
+}
+
 export function emailClaimedByAnyone(email: string): boolean {
   return (
     one<{ id: number }>("SELECT id FROM users WHERE email = ? COLLATE NOCASE", email) !== null ||

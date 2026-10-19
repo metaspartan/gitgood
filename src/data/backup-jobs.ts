@@ -13,6 +13,7 @@ import {
   type BackupTrigger,
   type StoredDestination,
 } from "./backups.ts";
+import { googleClient, googleRefreshToken } from "./google-drive.ts";
 
 const OUTPUT_LIMIT = 64 * 1024;
 const TEST_TIMEOUT_MS = 90_000;
@@ -20,12 +21,23 @@ const SCHEDULER_INTERVAL_MS = 60_000;
 let running = false;
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
+class SetupError extends Error {}
+
 function childEnv(destination: StoredDestination, extra: Record<string, string> = {}): Record<string, string | undefined> {
-  return {
+  const env: Record<string, string | undefined> = {
     ...process.env,
-    GITGOOD_BACKUP_JOB_DESTINATION: JSON.stringify({ id: destination.id, name: destination.name, kind: destination.kind, target: destination.target }),
+    GITGOOD_BACKUP_JOB_DESTINATION: JSON.stringify({ id: destination.id, name: destination.name, kind: destination.kind, target: destination.target, account_id: destination.account_id ?? null }),
     ...extra,
   };
+  delete env.GITGOOD_BACKUP_GOOGLE;
+  if (destination.kind === "google-drive") {
+    const client = googleClient();
+    if (!client) throw new SetupError("Set up the Google OAuth client in Admin → Backups first");
+    const refreshToken = googleRefreshToken(destination.account_id ?? -1);
+    if (!refreshToken) throw new SetupError("The Google account for this destination is not connected; reconnect it in Admin → Backups");
+    env.GITGOOD_BACKUP_GOOGLE = JSON.stringify({ client_id: client.clientId, client_secret: client.clientSecret, refresh_token: refreshToken });
+  }
+  return env;
 }
 
 async function readBounded(stream: ReadableStream<Uint8Array> | null | undefined): Promise<string> {
@@ -51,8 +63,15 @@ export function startBackupJob(destination: StoredDestination, trigger: BackupTr
   const prune = pruneCandidates(destination.id, destination.keep);
   void (async () => {
     try {
+      let env: Record<string, string | undefined>;
+      try {
+        env = childEnv(destination, { GITGOOD_BACKUP_PRUNE: JSON.stringify(prune) });
+      } catch (error) {
+        recordJobEnd(id, { state: "failed", error: error instanceof SetupError ? error.message : "Backup failed; see the server log for details" });
+        return;
+      }
       const child = Bun.spawn([process.execPath, jobScriptPath(), destination.id, id], {
-        env: childEnv(destination, { GITGOOD_BACKUP_PRUNE: JSON.stringify(prune) }),
+        env,
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -77,7 +96,14 @@ export function startBackupJob(destination: StoredDestination, trigger: BackupTr
 }
 
 export async function testDestination(destination: StoredDestination): Promise<{ ok: boolean; message: string; free_bytes: number | null }> {
-  const child = Bun.spawn([process.execPath, jobScriptPath(), "--test", destination.id], { env: childEnv(destination), stdout: "pipe", stderr: "pipe" });
+  let env: Record<string, string | undefined>;
+  try {
+    env = childEnv(destination);
+  } catch (error) {
+    if (error instanceof SetupError) return { ok: false, message: error.message, free_bytes: null };
+    throw error;
+  }
+  const child = Bun.spawn([process.execPath, jobScriptPath(), "--test", destination.id], { env, stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => child.kill("SIGKILL"), TEST_TIMEOUT_MS);
   try {
     const [stdout, stderr, code] = await Promise.all([readBounded(child.stdout), readBounded(child.stderr), child.exited]);

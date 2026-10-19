@@ -82,7 +82,7 @@ export function listDestinations(): StoredDestination[] {
   });
   const envIds = new Set(fromEnv.map((destination) => destination.id));
   const stored = all<Omit<StoredDestination, "source">>(
-    "SELECT id, name, kind, target, schedule, hour, weekday, keep, last_scheduled_at FROM backup_destinations ORDER BY created_at",
+    "SELECT id, name, kind, target, google_account_id AS account_id, schedule, hour, weekday, keep, last_scheduled_at FROM backup_destinations ORDER BY created_at",
   )
     .filter((row) => !envIds.has(row.id))
     .map((row): StoredDestination => ({ ...row, source: "admin" }));
@@ -93,17 +93,23 @@ export function findDestination(id: string): StoredDestination | null {
   return listDestinations().find((destination) => destination.id === id) ?? null;
 }
 
+function assertAccount(destination: BackupDestination): void {
+  if (destination.kind !== "google-drive") return;
+  if (!one<{ id: number }>("SELECT id FROM google_drive_accounts WHERE id = ?", destination.account_id ?? -1)) throw new Error("Choose a connected Google account");
+}
+
 export function createDestination(input: BackupDestination & ScheduleInput): StoredDestination {
   const destination = validateBackupDestination(input);
+  assertAccount(destination);
   const schedule = validateSchedule(input);
   const existing = listDestinations();
   if (existing.some((row) => row.id === destination.id)) throw new Error("A destination with that ID already exists");
   if (existing.length >= MAX_BACKUP_DESTINATIONS) throw new Error(`You can configure up to ${MAX_BACKUP_DESTINATIONS} destinations`);
   const timestamp = now();
   run(
-    `INSERT INTO backup_destinations (id, name, kind, target, schedule, hour, weekday, keep, last_scheduled_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    destination.id, destination.name, destination.kind, destination.target,
+    `INSERT INTO backup_destinations (id, name, kind, target, google_account_id, schedule, hour, weekday, keep, last_scheduled_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    destination.id, destination.name, destination.kind, destination.target, destination.account_id ?? null,
     schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, timestamp, timestamp, timestamp,
   );
   return findDestination(destination.id)!;
@@ -121,7 +127,7 @@ export function updateDestination(id: string, patch: Partial<Omit<BackupDestinat
   const scheduleChanged = schedule.schedule !== current.schedule || schedule.hour !== current.hour || schedule.weekday !== current.weekday;
   const lastScheduled = scheduleChanged ? now() : current.last_scheduled_at;
   if (current.source === "environment") {
-    if (patch.name !== undefined || patch.kind !== undefined || patch.target !== undefined) throw new Error("This destination is managed by the server environment; only its schedule can change here");
+    if (patch.name !== undefined || patch.kind !== undefined || patch.target !== undefined || patch.account_id !== undefined) throw new Error("This destination is managed by the server environment; only its schedule can change here");
     run(
       `INSERT INTO backup_env_schedules (id, schedule, hour, weekday, keep, last_scheduled_at) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET schedule = excluded.schedule, hour = excluded.hour, weekday = excluded.weekday, keep = excluded.keep, last_scheduled_at = excluded.last_scheduled_at`,
@@ -129,10 +135,17 @@ export function updateDestination(id: string, patch: Partial<Omit<BackupDestinat
     );
     return findDestination(id)!;
   }
-  const destination = validateBackupDestination({ id, name: patch.name ?? current.name, kind: patch.kind ?? current.kind, target: patch.target ?? current.target });
+  const destination = validateBackupDestination({
+    id,
+    name: patch.name ?? current.name,
+    kind: patch.kind ?? current.kind,
+    target: patch.target ?? current.target,
+    account_id: patch.account_id !== undefined ? patch.account_id : current.account_id,
+  });
+  assertAccount(destination);
   changes(
-    `UPDATE backup_destinations SET name = ?, kind = ?, target = ?, schedule = ?, hour = ?, weekday = ?, keep = ?, last_scheduled_at = ?, updated_at = ? WHERE id = ?`,
-    destination.name, destination.kind, destination.target, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled, now(), id,
+    `UPDATE backup_destinations SET name = ?, kind = ?, target = ?, google_account_id = ?, schedule = ?, hour = ?, weekday = ?, keep = ?, last_scheduled_at = ?, updated_at = ? WHERE id = ?`,
+    destination.name, destination.kind, destination.target, destination.account_id ?? null, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled, now(), id,
   );
   return findDestination(id)!;
 }
@@ -207,13 +220,13 @@ export function activeJob(): BackupJobRow | null {
   return one<BackupJobRow>("SELECT * FROM backup_jobs WHERE state = 'running' ORDER BY started_at DESC LIMIT 1");
 }
 
-export function pruneCandidates(destinationId: string, keep: number): string[] {
+export function pruneCandidates(destinationId: string, keep: number): { id: string; location: string | null }[] {
   if (keep <= 0) return [];
-  return all<{ id: string }>(
-    "SELECT id FROM backup_jobs WHERE destination_id = ? AND state = 'completed' AND pruned = 0 ORDER BY started_at DESC LIMIT -1 OFFSET ?",
+  return all<{ id: string; location: string | null }>(
+    "SELECT id, location FROM backup_jobs WHERE destination_id = ? AND state = 'completed' AND pruned = 0 ORDER BY started_at DESC LIMIT -1 OFFSET ?",
     destinationId,
     Math.max(0, keep - 1),
-  ).map((row) => row.id);
+  );
 }
 
 export function lastJobs(): Map<string, BackupJobRow> {

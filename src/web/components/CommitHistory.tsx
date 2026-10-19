@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
-import { Avatar, timeAgo } from "../components.tsx";
+import { timeAgo } from "../components.tsx";
+import { CommitAuthor } from "./CommitAuthor.tsx";
+import { Icon } from "./Icons.tsx";
 import { Link } from "../router.tsx";
 import type { Commit } from "../types.ts";
 import { copyText } from "../clipboard.ts";
@@ -26,11 +28,7 @@ export function groupCommitsByDay(commits: readonly Commit[], locale?: string): 
   return groups;
 }
 
-export function hueFromString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) % 360;
-  return hash;
-}
+export { hueFromString } from "./CommitAuthor.tsx";
 
 
 function CommitRow({ owner, repo, commit }: { owner: string; repo: string; commit: Commit }): ReactNode {
@@ -41,13 +39,6 @@ function CommitRow({ owner, repo, commit }: { owner: string; repo: string; commi
 
   return (
     <li className="commit-row">
-      <Avatar
-        user={{
-          username: commit.author.name,
-          display_name: commit.author.name || commit.author.email,
-          avatar_hue: hueFromString(commit.author.email || commit.author.name),
-        }}
-      />
       <div className="commit-row-main">
         <div className="commit-row-title">
           <Link to={`/${owner}/${repo}/commit/${commit.sha}`} className="commit-row-subject">
@@ -73,7 +64,7 @@ function CommitRow({ owner, repo, commit }: { owner: string; repo: string; commi
           </pre>
         ) : null}
         <div className="commit-row-meta">
-          <span className="commit-row-author">{commit.author.name}</span> committed{" "}
+          <CommitAuthor author={commit.author} /> committed{" "}
           <time dateTime={new Date(commit.authored_at).toISOString()} title={new Date(commit.authored_at).toLocaleString()}>
             {timeAgo(commit.authored_at)}
           </time>
@@ -92,7 +83,8 @@ function CommitRow({ owner, repo, commit }: { owner: string; repo: string; commi
             });
           }}
         >
-          {copied ? "copied" : commit.short_sha}
+          {copied ? "Copied!" : commit.short_sha}
+          <Icon name={copied ? "check" : "copy"} />
         </button>
         <Link
           to={`/${owner}/${repo}/tree/${commit.sha}`}
@@ -100,7 +92,7 @@ function CommitRow({ owner, repo, commit }: { owner: string; repo: string; commi
           title="Browse the repository at this point in the history"
           ariaLabel={`Browse files at ${commit.short_sha}`}
         >
-          <span aria-hidden="true">{"<>"}</span>
+          <Icon name="code" />
         </Link>
       </div>
     </li>
@@ -121,7 +113,7 @@ export function CommitHistory({
       {groupCommitsByDay(commits).map((day) => (
         <section key={day.key} className="commit-day" aria-label={`Commits on ${day.label}`}>
           <h4 className="commit-day-label">
-            <span className="commit-day-dot" aria-hidden="true" />
+            <Icon name="commit" className="commit-day-icon" />
             Commits on {day.label}
           </h4>
           <ol className="commit-day-list">

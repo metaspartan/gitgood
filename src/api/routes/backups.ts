@@ -24,6 +24,18 @@ import {
   type StoredDestination,
 } from "../../data/backups.ts";
 import { isBackupRunning, startBackupJob, testDestination } from "../../data/backup-jobs.ts";
+import {
+  cancelGoogleConnect,
+  disconnectGoogleAccount,
+  findGoogleAccount,
+  googleClientInfo,
+  listGoogleAccounts,
+  pollGoogleConnect,
+  removeGoogleClient,
+  saveGoogleClient,
+  startGoogleConnect,
+} from "../../data/google-drive.ts";
+import { GoogleError } from "../../lib/google-drive.ts";
 import { param } from "../helpers.ts";
 import * as v from "../../lib/validate.ts";
 import type { RouteContext, Router } from "../router.ts";
@@ -31,8 +43,9 @@ import type { RouteContext, Router } from "../router.ts";
 const destinationSchema = v.strictObject({
   id: v.string({ min: 1, max: 40 }),
   name: v.string({ min: 1, max: 80 }),
-  kind: v.enumOf(["local", "nas", "google-drive"] as const),
+  kind: v.enumOf(["local", "nas", "google-drive", "rclone"] as const),
   target: v.string({ min: 1, max: 1024 }),
+  account_id: v.optional(v.number({ int: true, min: 1 })),
   schedule: v.optional(v.enumOf(["manual", "daily", "weekly"] as const)),
   hour: v.optional(v.number({ int: true, min: 0, max: 23 })),
   weekday: v.optional(v.number({ int: true, min: 0, max: 6 })),
@@ -41,28 +54,51 @@ const destinationSchema = v.strictObject({
 
 const destinationPatchSchema = v.strictObject({
   name: v.optional(v.string({ min: 1, max: 80 })),
-  kind: v.optional(v.enumOf(["local", "nas", "google-drive"] as const)),
+  kind: v.optional(v.enumOf(["local", "nas", "google-drive", "rclone"] as const)),
   target: v.optional(v.string({ min: 1, max: 1024 })),
+  account_id: v.optional(v.number({ int: true, min: 1 })),
   schedule: v.optional(v.enumOf(["manual", "daily", "weekly"] as const)),
   hour: v.optional(v.number({ int: true, min: 0, max: 23 })),
   weekday: v.optional(v.number({ int: true, min: 0, max: 6 })),
   keep: v.optional(v.number({ int: true, min: 0, max: 365 })),
 });
 
+function asBadRequest(error: unknown): never {
+  if (error instanceof GoogleError) throw badRequest(error.message);
+  if (error instanceof Error && !("status" in error)) throw badRequest(error.message);
+  throw error;
+}
+
 function attempt<T>(action: () => T): T {
   try {
     return action();
   } catch (error) {
-    if (error instanceof Error && !("status" in error)) throw badRequest(error.message);
-    throw error;
+    asBadRequest(error);
   }
 }
 
+async function attemptAsync<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    asBadRequest(error);
+  }
+}
+
+const googleClientSchema = v.strictObject({ client_id: v.string({ min: 1, max: 240 }), client_secret: v.string({ min: 1, max: 240 }) });
+
+function googleJson() {
+  return { client: googleClientInfo(), accounts: listGoogleAccounts() };
+}
+
 function destinationJson(destination: StoredDestination, last: BackupJobRow | undefined) {
+  const account = destination.kind === "google-drive" && destination.account_id ? findGoogleAccount(destination.account_id) : null;
   return {
     id: destination.id,
     name: destination.name,
     kind: destination.kind,
+    account_id: destination.account_id ?? null,
+    account_email: account?.email ?? null,
     source: destination.source,
     ...(destination.source === "admin" ? { target: destination.target } : {}),
     schedule: destination.schedule,
@@ -151,7 +187,62 @@ export function registerBackupRoutes(router: Router): void {
       active: isBackupRunning(),
       timezone: "UTC",
       max_destinations: MAX_BACKUP_DESTINATIONS,
+      google: googleJson(),
     });
+  });
+
+  router.put("/api/admin/backups/google/client", async ctx => {
+    const admin = authorize(ctx);
+    const body = await readJson(ctx.request, googleClientSchema);
+    attempt(() => saveGoogleClient(body.client_id.trim(), body.client_secret.trim()));
+    recordAudit(admin, "backup.google_client_update", "google", "", ctx.ip);
+    return json(googleJson());
+  });
+
+  router.delete("/api/admin/backups/google/client", ctx => {
+    const admin = authorize(ctx);
+    if (googleClientInfo().source === "environment") throw conflict("The Google OAuth client is set in the server environment");
+    try {
+      removeGoogleClient();
+    } catch (error) {
+      throw conflict(error instanceof Error ? error.message : "Could not remove the client");
+    }
+    recordAudit(admin, "backup.google_client_delete", "google", "", ctx.ip);
+    return json(googleJson());
+  });
+
+  router.post("/api/admin/backups/google/connect", async ctx => {
+    const admin = authorize(ctx);
+    return json(await attemptAsync(() => startGoogleConnect(admin.userId)), { status: 201 });
+  });
+
+  router.post("/api/admin/backups/google/connect/:session", async ctx => {
+    const admin = authorize(ctx);
+    const result = await attemptAsync(() => pollGoogleConnect(param(ctx, "session"), admin.userId));
+    if (!result) throw notFound("Sign-in session not found");
+    if (result.state === "connected") recordAudit(admin, "backup.google_connect", String(result.account.id), result.account.email, ctx.ip);
+    return json(result);
+  });
+
+  router.delete("/api/admin/backups/google/connect/:session", ctx => {
+    const admin = authorize(ctx);
+    cancelGoogleConnect(param(ctx, "session"), admin.userId);
+    return new Response(null, { status: 204 });
+  });
+
+  router.delete("/api/admin/backups/google/accounts/:id", async ctx => {
+    const admin = authorize(ctx);
+    const id = Number(param(ctx, "id"));
+    if (!Number.isInteger(id) || id < 1) throw notFound("Account not found");
+    let removed: boolean;
+    try {
+      removed = await disconnectGoogleAccount(id);
+    } catch (error) {
+      throw conflict(error instanceof Error ? error.message : "Could not disconnect the account");
+    }
+    if (!removed) throw notFound("Account not found");
+    recordAudit(admin, "backup.google_disconnect", String(id), "", ctx.ip);
+    return json(googleJson());
   });
 
   router.post("/api/admin/backups", async ctx => {

@@ -76,9 +76,10 @@ export interface Commit {
   sha: string;
   short_sha: string;
   message: string;
-  author: { name: string; email: string };
+  author: { name: string; email: string; username?: string; avatar_hue?: number };
   authored_at: number;
   parents: string[];
+  refs?: { branches: string[]; tags: string[]; more: boolean };
   body?: string;
   stats?: { additions: number; deletions: number; filesChanged: number };
   files?: FileChange[];
@@ -565,7 +566,20 @@ export interface InstanceConfiguration {
   indexFileBytes: number;
 }
 
-export type BackupKind = "local" | "nas" | "google-drive";
+export type BackupKind = "local" | "nas" | "google-drive" | "rclone";
+
+export interface GoogleDriveAccount {
+  id: number;
+  email: string;
+  display_name: string;
+  created_at: number;
+  destinations: number;
+}
+
+export interface GoogleBackupState {
+  client: { configured: boolean; source: "environment" | "admin" | null; client_id_hint: string | null };
+  accounts: GoogleDriveAccount[];
+}
 export type BackupSchedule = "manual" | "daily" | "weekly";
 
 export interface BackupDestinationInput {
@@ -573,6 +587,7 @@ export interface BackupDestinationInput {
   name: string;
   kind: BackupKind;
   target: string;
+  account_id?: number | null;
   schedule: BackupSchedule;
   hour: number;
   weekday: number;
@@ -582,6 +597,7 @@ export interface BackupDestinationInput {
 export interface BackupDestinationInfo extends Omit<BackupDestinationInput, "target"> {
   target?: string;
   source: "admin" | "environment";
+  account_email: string | null;
   next_run_at: number | null;
   last_job: { id: string; state: "running" | "completed" | "failed"; started_at: number; finished_at: number | null; error: string | null } | null;
 }
