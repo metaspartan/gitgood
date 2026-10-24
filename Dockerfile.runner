@@ -1,4 +1,4 @@
-FROM oven/bun:1.4-alpine
+FROM oven/bun:1.4.4-alpine
 RUN apk add --no-cache docker-cli tar
 WORKDIR /runner
 COPY runner/gitgood-runner.ts ./gitgood-runner.ts

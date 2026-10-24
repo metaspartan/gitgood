@@ -33,7 +33,7 @@ const IMAGE_ALIASES: Record<string, string> = {
   "ubuntu-24.04": "ubuntu:24.04",
   "ubuntu-22.04": "ubuntu:22.04",
   "debian-latest": "debian:stable-slim",
-  bun: "oven/bun:1",
+  bun: "oven/bun:1.4.4-alpine",
   node: "node:22",
   alpine: "alpine:3",
 };

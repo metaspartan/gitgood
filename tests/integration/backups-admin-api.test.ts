@@ -113,7 +113,15 @@ describe("backup destinations", () => {
     expect(ok.data.free_bytes).toBeGreaterThan(0);
     const inside = `inside-${stamp}`;
     expect((await root.call("/api/admin/backups/destinations", "POST", { id: inside, name: "Inside", kind: "local", target: join(config.dataDir, "nested-backups") })).status).toBe(201);
-    const refused = await root.call<{ ok: boolean; message: string }>(`/api/admin/backups/destinations/${inside}/test`, "POST", {});
+    const previousDataDir = process.env.GITGOOD_DATA_DIR;
+    let refused: { status: number; data: { ok: boolean; message: string } };
+    try {
+      process.env.GITGOOD_DATA_DIR = join(target, "unrelated-data");
+      refused = await root.call<{ ok: boolean; message: string }>(`/api/admin/backups/destinations/${inside}/test`, "POST", {});
+    } finally {
+      if (previousDataDir === undefined) delete process.env.GITGOOD_DATA_DIR;
+      else process.env.GITGOOD_DATA_DIR = previousDataDir;
+    }
     expect(refused.data.ok).toBe(false);
     expect(refused.data.message).toContain("outside GitGood");
     expect(refused.data.message).not.toContain(config.dataDir);

@@ -5,7 +5,7 @@
   "description": "GitGood - a blazing fast, low-memory Git hosting platform (GitHub/GitLab alternative)",
   "type": "module",
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": ">=1.4.4"
   },
   "scripts": {
     "dev": "bun --hot src/server.ts",
@@ -31,10 +31,10 @@
     "three": "0.186.1"
   },
   "devDependencies": {
-    "@types/bun": "1.4.3",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
+    "@types/bun": "1.4.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@types/three": "0.186.0",
-    "typescript": "^7.0.2"
+    "typescript": "7.0.2"
   }
 }

@@ -88,7 +88,7 @@ name: CI
 on: [push, workflow_dispatch]
 jobs:
   test:
-    runs-on: oven/bun:1        # any container image, or ubuntu-latest / node / bun / alpine
+    runs-on: oven/bun:1.4.4-alpine # any container image, or ubuntu-latest / node / bun / alpine
     steps:
       - name: Install
         run: bun install

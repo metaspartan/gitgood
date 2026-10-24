@@ -11,7 +11,7 @@ bun run dev           # http://localhost:3000, hot reload
 bun run seed          # optional large demo dataset (users seed/dev1.., password in tools/seed.ts output)
 ```
 
-Requirements: Bun 1.4+, git 2.30+, git-lfs for LFS tests.
+Requirements: Bun 1.4.4+, git 2.30+, git-lfs for LFS tests.
 
 ## Verify every change
 

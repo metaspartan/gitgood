@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM oven/bun:1.4-alpine AS deps
+FROM oven/bun:1.4.4-alpine AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
@@ -13,7 +13,7 @@ COPY --chown=bun:bun tools ./tools
 COPY --chown=bun:bun tsconfig.json ./
 RUN bun tools/build-web.ts /app/dist/web
 
-FROM oven/bun:1.4-alpine AS runtime
+FROM oven/bun:1.4.4-alpine AS runtime
 
 RUN apk add --no-cache git git-lfs tini \
     && git lfs install --system --skip-repo \

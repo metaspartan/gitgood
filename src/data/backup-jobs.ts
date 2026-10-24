@@ -1,4 +1,5 @@
 import { log } from "../lib/logger.ts";
+import { config } from "../config.ts";
 import {
   activeJob,
   failInterruptedJobs,
@@ -26,6 +27,10 @@ class SetupError extends Error {}
 function childEnv(destination: StoredDestination, extra: Record<string, string> = {}): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
     ...process.env,
+    GITGOOD_DATA_DIR: config.dataDir,
+    GITGOOD_DB_PATH: config.dbPath,
+    GITGOOD_REPO_ROOT: config.repoRoot,
+    GITGOOD_LFS_ROOT: config.lfsRoot,
     GITGOOD_BACKUP_JOB_DESTINATION: JSON.stringify({ id: destination.id, name: destination.name, kind: destination.kind, target: destination.target, account_id: destination.account_id ?? null }),
     ...extra,
   };
