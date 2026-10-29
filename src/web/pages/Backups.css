@@ -59,3 +59,9 @@
 .google-wait { display: flex; align-items: center; gap: var(--s2); }
 .google-done { align-items: center; text-align: center; }
 .google-done > .icon { width: 32px; height: 32px; color: var(--success); }
+
+.backup-bandwidth { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius); }
+.backup-bandwidth legend { font-size: 14px; font-weight: 600; padding: 0 var(--s2); }
+.backup-bandwidth > label input { max-width: 220px; }
+.backup-bandwidth-calculator { display: flex; align-items: end; flex-wrap: wrap; gap: var(--s2); }
+.backup-bandwidth p { margin: 0; }

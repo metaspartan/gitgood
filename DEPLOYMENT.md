@@ -565,6 +565,16 @@ Instance administrators manage backups at **Admin area → Backups** (`/admin/ba
 - **Schedules**: manual, daily or weekly at a chosen hour (UTC). The server checks
   once a minute and runs at most one backup at a time; a run missed while the
   server was down starts once when it comes back.
+- **Upload bandwidth**: Google Drive and rclone destinations have a maximum upload
+  speed in Mbps (megabits per second, not megabytes). Set it directly, or enter your
+  internet connection's upload speed and use **20%**. Zero preserves the unlimited
+  behavior of existing destinations. The app does not run a speed test or infer WAN
+  speed from the LAN adapter. The saved rate applies to the next backup, not one
+  already running. Drive bodies are paced in small slices, including retries; rclone
+  uses its bandwidth limit. Protocol overhead is not included in the payload cap.
+  New destination forms default to weekly. Existing schedules are not changed by
+  upgrading. A slower full backup can take several days; the scheduler never runs
+  two backups at the same time.
 - **Retention**: keep the latest *N* backups per destination (0 keeps all). After a
   successful run, older copies GitGood made in that destination are deleted, locally
   and on the remote. Failed runs never delete anything.
@@ -627,6 +637,11 @@ target. `RCLONE_CONFIG` and `GITGOOD_RCLONE_BIN` are honoured. Each run is stage
 locally, then `rclone copy` and `rclone check` run with a one-hour deadline each; failures
 keep the local copy. Existing destinations that used a `drive:` rclone remote keep
 working as rclone destinations.
+
+To configure an environment destination's rate, use `upload_bytes_per_second`
+(an integer, 0 for unlimited). Admin changes to its rate, schedule and retention
+are saved in the database. Decimal Mbps are converted with `Mbps × 125,000`.
+For example, 5 Mbps is 625,000 bytes/s; a 30 Mbps WAN uplink at 20% is 6 Mbps.
 
 Backups are not encrypted by GitGood; use disk encryption or an rclone crypt remote and keep
 its keys elsewhere.

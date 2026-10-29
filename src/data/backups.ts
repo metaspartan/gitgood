@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { all, changes, now, one, run } from "../db/index.ts";
 import { log } from "../lib/logger.ts";
+import { validateUploadRate } from "../lib/upload-throttle.ts";
 import {
   BACKUP_ID_PATTERN,
   MAX_BACKUP_DESTINATIONS,
@@ -15,6 +16,7 @@ export type BackupState = "running" | "completed" | "failed";
 
 export interface StoredDestination extends BackupDestination {
   source: "admin" | "environment";
+  upload_bytes_per_second: number;
   schedule: BackupSchedule;
   hour: number;
   weekday: number;
@@ -66,13 +68,14 @@ export function validateSchedule(input: ScheduleInput): ScheduleInput {
 
 export function listDestinations(): StoredDestination[] {
   const schedules = new Map(
-    all<ScheduleInput & { id: string; last_scheduled_at: number | null }>("SELECT * FROM backup_env_schedules").map((row) => [row.id, row]),
+    all<ScheduleInput & { id: string; last_scheduled_at: number | null; upload_bytes_per_second: number }>("SELECT * FROM backup_env_schedules").map((row) => [row.id, row]),
   );
   const fromEnv = environmentDestinations().map((destination): StoredDestination => {
     const stored = schedules.get(destination.id);
     return {
       ...destination,
       source: "environment",
+      upload_bytes_per_second: stored?.upload_bytes_per_second ?? destination.upload_bytes_per_second ?? 0,
       schedule: stored?.schedule ?? "manual",
       hour: stored?.hour ?? 3,
       weekday: stored?.weekday ?? 0,
@@ -82,7 +85,7 @@ export function listDestinations(): StoredDestination[] {
   });
   const envIds = new Set(fromEnv.map((destination) => destination.id));
   const stored = all<Omit<StoredDestination, "source">>(
-    "SELECT id, name, kind, target, google_account_id AS account_id, schedule, hour, weekday, keep, last_scheduled_at FROM backup_destinations ORDER BY created_at",
+    "SELECT id, name, kind, target, google_account_id AS account_id, upload_bytes_per_second, schedule, hour, weekday, keep, last_scheduled_at FROM backup_destinations ORDER BY created_at",
   )
     .filter((row) => !envIds.has(row.id))
     .map((row): StoredDestination => ({ ...row, source: "admin" }));
@@ -107,9 +110,9 @@ export function createDestination(input: BackupDestination & ScheduleInput): Sto
   if (existing.length >= MAX_BACKUP_DESTINATIONS) throw new Error(`You can configure up to ${MAX_BACKUP_DESTINATIONS} destinations`);
   const timestamp = now();
   run(
-    `INSERT INTO backup_destinations (id, name, kind, target, google_account_id, schedule, hour, weekday, keep, last_scheduled_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    destination.id, destination.name, destination.kind, destination.target, destination.account_id ?? null,
+    `INSERT INTO backup_destinations (id, name, kind, target, google_account_id, upload_bytes_per_second, schedule, hour, weekday, keep, last_scheduled_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    destination.id, destination.name, destination.kind, destination.target, destination.account_id ?? null, destination.upload_bytes_per_second ?? 0,
     schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, timestamp, timestamp, timestamp,
   );
   return findDestination(destination.id)!;
@@ -124,14 +127,15 @@ export function updateDestination(id: string, patch: Partial<Omit<BackupDestinat
     weekday: patch.weekday ?? current.weekday,
     keep: patch.keep ?? current.keep,
   });
+  const uploadBytesPerSecond = validateUploadRate(patch.upload_bytes_per_second ?? current.upload_bytes_per_second);
   const scheduleChanged = schedule.schedule !== current.schedule || schedule.hour !== current.hour || schedule.weekday !== current.weekday;
   const lastScheduled = scheduleChanged ? now() : current.last_scheduled_at;
   if (current.source === "environment") {
     if (patch.name !== undefined || patch.kind !== undefined || patch.target !== undefined || patch.account_id !== undefined) throw new Error("This destination is managed by the server environment; only its schedule can change here");
     run(
-      `INSERT INTO backup_env_schedules (id, schedule, hour, weekday, keep, last_scheduled_at) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET schedule = excluded.schedule, hour = excluded.hour, weekday = excluded.weekday, keep = excluded.keep, last_scheduled_at = excluded.last_scheduled_at`,
-      id, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled,
+      `INSERT INTO backup_env_schedules (id, schedule, hour, weekday, keep, last_scheduled_at, upload_bytes_per_second) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET schedule = excluded.schedule, hour = excluded.hour, weekday = excluded.weekday, keep = excluded.keep, last_scheduled_at = excluded.last_scheduled_at, upload_bytes_per_second = excluded.upload_bytes_per_second`,
+      id, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled, uploadBytesPerSecond,
     );
     return findDestination(id)!;
   }
@@ -141,11 +145,12 @@ export function updateDestination(id: string, patch: Partial<Omit<BackupDestinat
     kind: patch.kind ?? current.kind,
     target: patch.target ?? current.target,
     account_id: patch.account_id !== undefined ? patch.account_id : current.account_id,
+    upload_bytes_per_second: uploadBytesPerSecond,
   });
   assertAccount(destination);
   changes(
-    `UPDATE backup_destinations SET name = ?, kind = ?, target = ?, google_account_id = ?, schedule = ?, hour = ?, weekday = ?, keep = ?, last_scheduled_at = ?, updated_at = ? WHERE id = ?`,
-    destination.name, destination.kind, destination.target, destination.account_id ?? null, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled, now(), id,
+    `UPDATE backup_destinations SET name = ?, kind = ?, target = ?, google_account_id = ?, upload_bytes_per_second = ?, schedule = ?, hour = ?, weekday = ?, keep = ?, last_scheduled_at = ?, updated_at = ? WHERE id = ?`,
+    destination.name, destination.kind, destination.target, destination.account_id ?? null, uploadBytesPerSecond, schedule.schedule, schedule.hour, schedule.weekday, schedule.keep, lastScheduled, now(), id,
   );
   return findDestination(id)!;
 }
@@ -158,9 +163,9 @@ export function deleteDestination(id: string): boolean {
 export function markScheduled(destination: StoredDestination, at: number): void {
   if (destination.source === "environment") {
     run(
-      `INSERT INTO backup_env_schedules (id, schedule, hour, weekday, keep, last_scheduled_at) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO backup_env_schedules (id, schedule, hour, weekday, keep, last_scheduled_at, upload_bytes_per_second) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET last_scheduled_at = excluded.last_scheduled_at`,
-      destination.id, destination.schedule, destination.hour, destination.weekday, destination.keep, at,
+      destination.id, destination.schedule, destination.hour, destination.weekday, destination.keep, at, destination.upload_bytes_per_second,
     );
   } else {
     changes("UPDATE backup_destinations SET last_scheduled_at = ? WHERE id = ?", at, destination.id);

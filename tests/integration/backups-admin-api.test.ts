@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createServer } from "../../src/server.ts";
 import { changes } from "../../src/db/index.ts";
 import { config } from "../../src/config.ts";
-import { isDue, latestSlot, nextSlot } from "../../src/data/backups.ts";
+import { findDestination, isDue, latestSlot, markScheduled, nextSlot } from "../../src/data/backups.ts";
 import { parseWorkerError } from "../../src/data/backup-jobs.ts";
 
 const server = createServer(0);
@@ -39,7 +39,7 @@ class Client {
 
 const root = new Client();
 const user = new Client();
-type Destination = { id: string; name: string; kind: string; source: string; target?: string; schedule: string; hour: number; weekday: number; keep: number; next_run_at: number | null };
+type Destination = { upload_bytes_per_second: number; id: string; name: string; kind: string; source: string; target?: string; schedule: string; hour: number; weekday: number; keep: number; next_run_at: number | null };
 type Job = { id: string; destination_id: string; state: string; bytes: number | null; error: string | null; location: string | null; pruned: number; trigger: string };
 type State = { destinations: Destination[]; jobs: Job[]; active: boolean };
 
@@ -75,11 +75,14 @@ describe("backup destinations", () => {
 
   test("an administrator adds a destination with a schedule and retention", async () => {
     const created = await root.call<Destination>("/api/admin/backups/destinations", "POST", {
-      id, name: "Recovery disk", kind: "local", target: join(target, "stored"), schedule: "daily", hour: 2, keep: 1,
+      id, name: "Recovery disk", kind: "local", target: join(target, "stored"), schedule: "weekly", weekday: 0, hour: 3, keep: 1, upload_bytes_per_second: 625_000,
     });
     expect(created.status).toBe(201);
-    expect(created.data).toMatchObject({ id, source: "admin", target: join(target, "stored"), schedule: "daily", hour: 2, keep: 1 });
-    expect(created.data.next_run_at).toBeGreaterThan(Date.now());
+    expect(created.data).toMatchObject({ id, source: "admin", target: join(target, "stored"), schedule: "weekly", weekday: 0, hour: 3, keep: 1, upload_bytes_per_second: 625_000 });
+        expect(created.data.next_run_at).toBeGreaterThan(Date.now());
+    expect(new Date(created.data.next_run_at!).getUTCDay()).toBe(0);
+    expect(new Date(created.data.next_run_at!).getUTCHours()).toBe(3);
+    expect((await root.call<State>("/api/admin/backups")).data.destinations.find((entry) => entry.id === id)!.upload_bytes_per_second).toBe(625_000);
   });
 
   test("bad input is rejected with a clear message", async () => {
@@ -95,14 +98,21 @@ describe("backup destinations", () => {
       expect(response.data.error.message.length).toBeGreaterThan(5);
     }
     expect((await root.call("/api/admin/backups/destinations", "POST", { id: `x-${stamp}`, name: "x", kind: "ftp", target: "/x" })).status).toBe(400);
+    for (const upload_bytes_per_second of [-1, 0.5, 1_250_000_001, "fast"]) {
+      expect((await root.call(`/api/admin/backups/destinations/${id}`, "PATCH", { upload_bytes_per_second })).status).toBe(400);
+    }
+    expect((await root.call<Destination>(`/api/admin/backups/destinations/${id}`, "PATCH", { upload_bytes_per_second: 1_250_000_000 })).data.upload_bytes_per_second).toBe(1_250_000_000);
+    expect((await root.call<Destination>(`/api/admin/backups/destinations/${id}`, "PATCH", { upload_bytes_per_second: 0 })).data.upload_bytes_per_second).toBe(0);
+    await root.call(`/api/admin/backups/destinations/${id}`, "PATCH", { upload_bytes_per_second: 625_000 });
   });
 
   test("environment destinations are listed without their path; only their schedule is editable", async () => {
     const state = await root.call<State>("/api/admin/backups");
     const env = state.data.destinations.find((d) => d.id === `env-${stamp}`)!;
     expect(env.source).toBe("environment");
+    markScheduled(findDestination(`env-${stamp}`)!, Date.now());
     expect(env).not.toHaveProperty("target");
-    expect((await root.call<Destination>(`/api/admin/backups/destinations/env-${stamp}`, "PATCH", { schedule: "weekly", weekday: 6, hour: 4 })).data).toMatchObject({ schedule: "weekly", weekday: 6, hour: 4 });
+    expect((await root.call<Destination>(`/api/admin/backups/destinations/env-${stamp}`, "PATCH", { schedule: "weekly", weekday: 6, hour: 4, upload_bytes_per_second: 125_000 })).data).toMatchObject({ schedule: "weekly", weekday: 6, hour: 4, upload_bytes_per_second: 125_000 });
     expect((await root.call(`/api/admin/backups/destinations/env-${stamp}`, "PATCH", { target: "/elsewhere" })).status).toBe(400);
     expect((await root.call(`/api/admin/backups/destinations/env-${stamp}`, "DELETE")).status).toBe(409);
   });
@@ -148,7 +158,7 @@ describe("backup destinations", () => {
 
   test("editing and deleting a stored destination", async () => {
     const updated = await root.call<Destination>(`/api/admin/backups/destinations/${id}`, "PATCH", { name: "Renamed", schedule: "manual" });
-    expect(updated.data).toMatchObject({ name: "Renamed", schedule: "manual", next_run_at: null });
+    expect(updated.data).toMatchObject({ name: "Renamed", schedule: "manual", next_run_at: null, upload_bytes_per_second: 625_000 });
     expect((await root.call(`/api/admin/backups/destinations/${id}`, "DELETE")).status).toBe(204);
     expect((await root.call(`/api/admin/backups/destinations/${id}`, "DELETE")).status).toBe(404);
   });

@@ -28,6 +28,10 @@ export function scheduleSummary(destination: Pick<BackupDestinationInput, "sched
   return `${when} · ${destination.keep === 0 ? "keeps every copy" : `keeps the latest ${destination.keep}`}`;
 }
 
+export function uploadLimitSummary(bytesPerSecond: number): string {
+  return bytesPerSecond > 0 ? `Upload capped at ${(bytesPerSecond * 8 / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 3 })} Mbps` : "Upload speed unlimited";
+}
+
 function localHourHint(hour: number): string {
   const date = new Date(Date.UTC(2026, 0, 5, hour));
   return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -44,7 +48,7 @@ function StateBadge({ state }: { state: BackupJobInfo["state"] }): ReactNode {
   return <span className={`backup-state is-${state}`}><span className="runner-dot" aria-hidden="true" />{label}</span>;
 }
 
-const EMPTY_FORM: BackupDestinationInput = { id: "", name: "", kind: "local", target: "", schedule: "daily", hour: 3, weekday: 0, keep: 7 };
+const EMPTY_FORM: BackupDestinationInput = { id: "", name: "", kind: "local", target: "", schedule: "weekly", hour: 3, weekday: 0, keep: 7, upload_bytes_per_second: 0 };
 
 function DestinationForm({ initial, editing, accounts, onSaved, onCancel }: {
   initial: BackupDestinationInput;
@@ -57,6 +61,7 @@ function DestinationForm({ initial, editing, accounts, onSaved, onCancel }: {
   const [idTouched, setIdTouched] = useState(editing !== null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [connectionMbps, setConnectionMbps] = useState("");
   const managed = editing?.source === "environment";
   const set = <K extends keyof BackupDestinationInput>(key: K, value: BackupDestinationInput[K]) => setForm((current) => ({ ...current, [key]: value }));
 
@@ -71,7 +76,7 @@ function DestinationForm({ initial, editing, accounts, onSaved, onCancel }: {
           if (editing) {
             const { id: _id, ...rest } = form;
             void _id;
-            await api.updateBackupDestination(editing.id, managed ? { schedule: rest.schedule, hour: rest.hour, weekday: rest.weekday, keep: rest.keep } : rest);
+            await api.updateBackupDestination(editing.id, managed ? { schedule: rest.schedule, hour: rest.hour, weekday: rest.weekday, keep: rest.keep, upload_bytes_per_second: rest.upload_bytes_per_second ?? 0 } : rest);
           } else {
             await api.createBackupDestination(form);
           }
@@ -168,6 +173,38 @@ function DestinationForm({ initial, editing, accounts, onSaved, onCancel }: {
           <input type="number" min={0} max={365} value={form.keep} onChange={(e) => set("keep", Math.max(0, Math.min(365, Number(e.target.value) || 0)))} />
           <span className="small faint">Older copies made by GitGood are deleted after each successful backup. 0 keeps everything.</span>
         </label>
+        {form.kind === "google-drive" || form.kind === "rclone" ? (
+          <fieldset className="backup-bandwidth backup-form-wide">
+            <legend>Upload bandwidth</legend>
+            <label>
+              Maximum upload (Mbps)
+              <input
+                type="number"
+                min="0"
+                max="10000"
+                step="0.001"
+                required
+                value={(form.upload_bytes_per_second ?? 0) * 8 / 1_000_000}
+                onChange={(event) => set("upload_bytes_per_second", Math.round(Number(event.target.value) * 125_000))}
+              />
+              <span className="small faint">0 means unlimited. This caps backup file uploads, including retries, not other GitGood traffic. Changes apply to the next backup.</span>
+            </label>
+            <div className="backup-bandwidth-calculator">
+              <label>
+                Connection upload speed (Mbps)
+                <input type="number" min="0.005" max="50000" step="any" value={connectionMbps} placeholder="Your ISP upload speed" onChange={(event) => setConnectionMbps(event.target.value)} />
+              </label>
+              <button
+                type="button"
+                disabled={!Number.isFinite(Number(connectionMbps)) || Number(connectionMbps) < 0.005 || Number(connectionMbps) > 50000}
+                onClick={() => set("upload_bytes_per_second", Math.round(Number(connectionMbps) * 25_000))}
+              >
+                Use 20%
+              </button>
+            </div>
+            <p className="small muted">For example, a 30 Mbps upload connection gives backups a 6 Mbps limit. Enter the WAN upload speed, not the LAN link speed. Slower backups may take several days; only one runs at a time.</p>
+          </fieldset>
+        ) : null}
       </div>
       <div className="row">
         <button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Add destination"}</button>
@@ -208,6 +245,7 @@ function DestinationCard({ destination, active, onEdit, onChanged, onError }: {
           <div className="small muted backup-target">{destination.account_email ?? "Disconnected account"} · My Drive / {destination.target}</div>
         ) : destination.target ? <div className="small mono muted backup-target">{destination.target}</div> : null}
         <div className="small muted">{scheduleSummary(destination)}{destination.next_run_at ? ` · next ${new Date(destination.next_run_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}` : ""}</div>
+        {destination.kind === "google-drive" || destination.kind === "rclone" ? <div className="small muted">{uploadLimitSummary(destination.upload_bytes_per_second ?? 0)}</div> : null}
         <div className="small">
           {destination.last_job ? (
             <>
@@ -282,7 +320,7 @@ export function BackupsPage(): ReactNode {
       {formFor !== null ? (
         <DestinationForm
           key={formFor === "new" ? "new" : formFor.id}
-          initial={formFor === "new" ? EMPTY_FORM : { id: formFor.id, name: formFor.name, kind: formFor.kind, target: formFor.target ?? "", account_id: formFor.account_id ?? null, schedule: formFor.schedule, hour: formFor.hour, weekday: formFor.weekday, keep: formFor.keep }}
+          initial={formFor === "new" ? EMPTY_FORM : { id: formFor.id, name: formFor.name, kind: formFor.kind, target: formFor.target ?? "", account_id: formFor.account_id ?? null, schedule: formFor.schedule, hour: formFor.hour, weekday: formFor.weekday, keep: formFor.keep, upload_bytes_per_second: formFor.upload_bytes_per_second ?? 0 }}
           editing={formFor === "new" ? null : formFor}
           accounts={data?.google.accounts ?? []}
           onCancel={() => setFormFor(null)}

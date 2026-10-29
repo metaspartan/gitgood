@@ -127,6 +127,7 @@ async function uploadToDrive(destination: BackupDestination, outDir: string, job
   try {
     uploaded = await uploadStream(tokens, folderId, archiveName(jobId), tar.stdout as ReadableStream<Uint8Array>, {
       chunkBytes: Number(process.env.GITGOOD_GOOGLE_CHUNK_BYTES) || undefined,
+      bytesPerSecond: destination.upload_bytes_per_second ?? 0,
     });
   } catch (error) {
     tar.kill();
@@ -186,7 +187,9 @@ async function backup(destination: BackupDestination, jobId: string): Promise<{ 
   } else if (destination.kind === "rclone") {
     location = remotePath(destination, jobId);
     for (const command of ["copy", "check"]) {
-      const code = await rclone([command, outDir, location, "--retries", "2", "--contimeout", "15s", "--timeout", "2m"], 60 * 60 * 1000);
+      const rate = destination.upload_bytes_per_second ?? 0;
+      const timeout = Math.min(2_147_483_647, 60 * 60 * 1000 + (rate > 0 ? Math.ceil((bytes * 1000) / rate) : 0));
+      const code = await rclone([command, outDir, location, ...(rate > 0 ? ["--bwlimit", `${rate}B`] : []), "--retries", "2", "--contimeout", "15s", "--timeout", "2m"], timeout);
       if (code !== 0) throw new SafeError("Remote transfer or verification failed; the local staging copy was kept");
     }
   }

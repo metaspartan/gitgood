@@ -1,3 +1,5 @@
+import { UploadThrottle, validateUploadRate } from "./upload-throttle.ts";
+
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024;
 const CHUNK_ALIGN = 256 * 1024;
@@ -50,23 +52,35 @@ async function readLimited(response: Response): Promise<string> {
   return new TextDecoder().decode(Buffer.concat(parts));
 }
 
-async function send(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<{ status: number; headers: Headers; body: Record<string, any> }> {
-  let response: Response;
+async function send(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS, bodyFactory?: (signal: AbortSignal) => BodyInit): Promise<{ status: number; headers: Headers; body: Record<string, any> }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    response = await fetch(url, { ...init, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
-  } catch {
-    throw new GoogleError("Could not reach Google", "network");
-  }
-  const text = await readLimited(response);
-  let body: Record<string, any> = {};
-  if (text) {
+    let response: Response;
     try {
-      body = JSON.parse(text);
+      response = await fetch(url, {
+        ...init,
+        ...(bodyFactory ? { body: bodyFactory(controller.signal) } : {}),
+        redirect: "manual",
+        signal: controller.signal,
+      });
     } catch {
-      body = {};
+      throw new GoogleError("Could not reach Google", "network");
     }
+    const text = await readLimited(response);
+    let body: Record<string, any> = {};
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = {};
+      }
+    }
+    return { status: response.status, headers: response.headers, body };
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
-  return { status: response.status, headers: response.headers, body };
 }
 
 function form(values: Record<string, string>): RequestInit {
@@ -154,10 +168,10 @@ export function tokenSource(client: GoogleClient, refreshToken: string): TokenSo
   };
 }
 
-async function authorized(tokens: TokenSource, url: string, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
-  let result = await send(url, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await tokens.token()}` } }, timeoutMs);
+async function authorized(tokens: TokenSource, url: string, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS, bodyFactory?: (signal: AbortSignal) => BodyInit) {
+  let result = await send(url, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await tokens.token()}` } }, timeoutMs, bodyFactory);
   if (result.status === 401) {
-    result = await send(url, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await tokens.refresh()}` } }, timeoutMs);
+    result = await send(url, { ...init, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await tokens.refresh()}` } }, timeoutMs, bodyFactory);
   }
   return result;
 }
@@ -244,10 +258,12 @@ export async function uploadStream(
   folderId: string,
   name: string,
   stream: ReadableStream<Uint8Array>,
-  options: { chunkBytes?: number; mimeType?: string } = {},
+  options: { chunkBytes?: number; mimeType?: string; bytesPerSecond?: number } = {},
 ): Promise<UploadResult> {
   const chunkBytes = Math.max(CHUNK_ALIGN, Math.floor((options.chunkBytes ?? DEFAULT_CHUNK_BYTES) / CHUNK_ALIGN) * CHUNK_ALIGN);
   const mimeType = options.mimeType ?? "application/x-tar";
+  const bytesPerSecond = validateUploadRate(options.bytesPerSecond);
+  const throttle = new UploadThrottle(bytesPerSecond);
   const start = await authorized(tokens, `${apiBase()}/upload/drive/v3/files?uploadType=resumable&fields=id,size,md5Checksum`, {
     method: "POST",
     headers: { "content-type": "application/json; charset=UTF-8", "x-upload-content-type": mimeType },
@@ -290,56 +306,64 @@ export async function uploadStream(
 
   const peek = (count: number): Uint8Array => Buffer.concat(pending, pendingBytes).subarray(0, count);
 
-  for (;;) {
-    await fill();
-    const final = ended && pendingBytes <= chunkBytes;
-    const size = final ? pendingBytes : chunkBytes;
-    const body = peek(size);
-    const range = size === 0 ? `bytes */${total}` : `bytes ${offset}-${offset + size - 1}/${final ? total : "*"}`;
-    let result: Awaited<ReturnType<typeof send>> | null = null;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      try {
-        result = await authorized(tokens, session, { method: "PUT", headers: { "content-range": range, "content-type": mimeType }, body: new Blob([body as Uint8Array<ArrayBuffer>]) }, CHUNK_TIMEOUT_MS);
-      } catch (error) {
-        if (!(error instanceof GoogleError) || error.reason !== "network") throw error;
-        result = null;
-      }
-      if (result && (result.status < 500 && result.status !== 429)) break;
-      if (attempt === MAX_ATTEMPTS) throw new GoogleError("Google Drive kept failing during the upload", "retries_exhausted", result?.status ?? 0);
-      await Bun.sleep(Math.min(16_000, 500 * 2 ** attempt));
-      const probe = await authorized(tokens, session, { method: "PUT", headers: { "content-range": `bytes */${final ? total : "*"}` } }).catch(() => null);
-      if (probe && (probe.status === 200 || probe.status === 201)) {
-        result = probe;
-        break;
-      }
-      if (probe?.status === 308) {
-        const received = acknowledged(probe.headers);
-        if (received > offset) {
-          take(received - offset);
-          offset = received;
+  try {
+    for (;;) {
+      await fill();
+      const final = ended && pendingBytes <= chunkBytes;
+      const size = final ? pendingBytes : chunkBytes;
+      const body = peek(size);
+      const range = size === 0 ? `bytes */${total}` : `bytes ${offset}-${offset + size - 1}/${final ? total : "*"}`;
+      let result: Awaited<ReturnType<typeof send>> | null = null;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const timeout = Math.min(2_147_483_647, CHUNK_TIMEOUT_MS + (bytesPerSecond > 0 ? Math.ceil((body.byteLength * 1000) / bytesPerSecond) : 0));
+          result = await authorized(tokens, session, {
+            method: "PUT",
+            headers: { "content-range": range, "content-type": mimeType, "content-length": String(body.byteLength) },
+            ...(bytesPerSecond === 0 ? { body: new Blob([body as Uint8Array<ArrayBuffer>]) } : {}),
+          }, timeout, bytesPerSecond > 0 ? (signal) => throttle.body(body, signal) : undefined);
+        } catch (error) {
+          if (!(error instanceof GoogleError) || error.reason !== "network") throw error;
+          result = null;
+        }
+        if (result && (result.status < 500 && result.status !== 429)) break;
+        if (attempt === MAX_ATTEMPTS) throw new GoogleError("Google Drive kept failing during the upload", "retries_exhausted", result?.status ?? 0);
+        await Bun.sleep(Math.min(16_000, 500 * 2 ** attempt));
+        const probe = await authorized(tokens, session, { method: "PUT", headers: { "content-range": `bytes */${final ? total : "*"}` } }).catch(() => null);
+        if (probe && (probe.status === 200 || probe.status === 201)) {
           result = probe;
           break;
         }
+        if (probe?.status === 308) {
+          const received = acknowledged(probe.headers);
+          if (received > offset) {
+            result = probe;
+            break;
+          }
+        }
       }
+      if (!result) throw new GoogleError("Google Drive kept failing during the upload", "retries_exhausted");
+      if (result.status === 200 || result.status === 201) {
+        const id = result.body.id;
+        const md5 = String(result.body.md5Checksum ?? "");
+        const uploaded = Number(result.body.size ?? total);
+        const expected = hasher.digest("hex");
+        if (typeof id !== "string") throw new GoogleError("Google Drive did not return the uploaded file", "no_id");
+        if (uploaded !== total || (md5 && md5 !== expected)) throw new GoogleError("The uploaded file did not match what was sent", "checksum_mismatch");
+        return { id, size: total, md5: expected };
+      }
+      if (result.status === 308) {
+        const received = acknowledged(result.headers);
+        if (received < offset) throw new GoogleError("Google Drive lost part of the upload", "regressed");
+        if (received > offset) take(received - offset);
+        offset = Math.max(offset, received);
+        continue;
+      }
+      if (result.status === 404 || result.status === 410) throw new GoogleError("The Google Drive upload session expired", "session_expired", result.status);
+      throw apiError(result.status, result.body);
     }
-    if (!result) throw new GoogleError("Google Drive kept failing during the upload", "retries_exhausted");
-    if (result.status === 200 || result.status === 201) {
-      const id = result.body.id;
-      const md5 = String(result.body.md5Checksum ?? "");
-      const uploaded = Number(result.body.size ?? total);
-      const expected = hasher.digest("hex");
-      if (typeof id !== "string") throw new GoogleError("Google Drive did not return the uploaded file", "no_id");
-      if (uploaded !== total || (md5 && md5 !== expected)) throw new GoogleError("The uploaded file did not match what was sent", "checksum_mismatch");
-      return { id, size: total, md5: expected };
-    }
-    if (result.status === 308) {
-      const received = acknowledged(result.headers);
-      if (received < offset) throw new GoogleError("Google Drive lost part of the upload", "regressed");
-      if (received > offset) take(received - offset);
-      offset = Math.max(offset, received);
-      continue;
-    }
-    if (result.status === 404 || result.status === 410) throw new GoogleError("The Google Drive upload session expired", "session_expired", result.status);
-    throw apiError(result.status, result.body);
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
 }

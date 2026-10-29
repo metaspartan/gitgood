@@ -36,6 +36,7 @@ import {
   startGoogleConnect,
 } from "../../data/google-drive.ts";
 import { GoogleError } from "../../lib/google-drive.ts";
+import { MAX_UPLOAD_BYTES_PER_SECOND } from "../../lib/upload-throttle.ts";
 import { param } from "../helpers.ts";
 import * as v from "../../lib/validate.ts";
 import type { RouteContext, Router } from "../router.ts";
@@ -46,6 +47,7 @@ const destinationSchema = v.strictObject({
   kind: v.enumOf(["local", "nas", "google-drive", "rclone"] as const),
   target: v.string({ min: 1, max: 1024 }),
   account_id: v.optional(v.number({ int: true, min: 1 })),
+  upload_bytes_per_second: v.optional(v.number({ int: true, min: 0, max: MAX_UPLOAD_BYTES_PER_SECOND })),
   schedule: v.optional(v.enumOf(["manual", "daily", "weekly"] as const)),
   hour: v.optional(v.number({ int: true, min: 0, max: 23 })),
   weekday: v.optional(v.number({ int: true, min: 0, max: 6 })),
@@ -57,6 +59,7 @@ const destinationPatchSchema = v.strictObject({
   kind: v.optional(v.enumOf(["local", "nas", "google-drive", "rclone"] as const)),
   target: v.optional(v.string({ min: 1, max: 1024 })),
   account_id: v.optional(v.number({ int: true, min: 1 })),
+  upload_bytes_per_second: v.optional(v.number({ int: true, min: 0, max: MAX_UPLOAD_BYTES_PER_SECOND })),
   schedule: v.optional(v.enumOf(["manual", "daily", "weekly"] as const)),
   hour: v.optional(v.number({ int: true, min: 0, max: 23 })),
   weekday: v.optional(v.number({ int: true, min: 0, max: 6 })),
@@ -100,6 +103,7 @@ function destinationJson(destination: StoredDestination, last: BackupJobRow | un
     account_id: destination.account_id ?? null,
     account_email: account?.email ?? null,
     source: destination.source,
+    upload_bytes_per_second: destination.upload_bytes_per_second,
     ...(destination.source === "admin" ? { target: destination.target } : {}),
     schedule: destination.schedule,
     hour: destination.hour,

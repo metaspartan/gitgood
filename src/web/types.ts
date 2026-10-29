@@ -592,6 +592,7 @@ export interface BackupDestinationInput {
   hour: number;
   weekday: number;
   keep: number;
+  upload_bytes_per_second?: number;
 }
 
 export interface BackupDestinationInfo extends Omit<BackupDestinationInput, "target"> {

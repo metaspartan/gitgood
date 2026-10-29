@@ -23,6 +23,7 @@ const google = {
   refreshCount: 0,
   faults: [] as ("503" | "partial" | "401")[],
   nextId: 1,
+  receptions: [] as { at: number; bytes: number }[],
 };
 
 const fake = Bun.serve({
@@ -102,7 +103,12 @@ const fake = Bun.serve({
       if (fault === "503") return new Response("unavailable", { status: 503 });
       if (fault === "401") return Response.json({ error: { code: 401 } }, { status: 401 });
       const start = Number(match[1]);
-      let bytes = new Uint8Array(await request.arrayBuffer());
+      const parts: Uint8Array[] = [];
+      for await (const part of request.body!) {
+        google.receptions.push({ at: performance.now(), bytes: part.byteLength });
+        parts.push(part);
+      }
+      let bytes = new Uint8Array(Buffer.concat(parts));
       if (start !== session.size) return new Response("offset mismatch", { status: 400 });
       if (fault === "partial") bytes = bytes.subarray(0, Math.floor(bytes.byteLength / 2));
       session.received.push(bytes);
@@ -256,9 +262,9 @@ describe("Google Drive backups", () => {
     expect((await root.call("/api/admin/backups/destinations", "POST", { id, name: "Drive", kind: "google-drive", target: "GitGood Backups" })).status).toBe(400);
     expect((await root.call("/api/admin/backups/destinations", "POST", { id, name: "Drive", kind: "google-drive", target: "a/b", account_id: accountId })).status).toBe(400);
     expect((await root.call("/api/admin/backups/destinations", "POST", { id, name: "Drive", kind: "google-drive", target: "GitGood Backups", account_id: 999999 })).status).toBe(400);
-    const created = await root.call("/api/admin/backups/destinations", "POST", { id, name: "Drive", kind: "google-drive", target: "GitGood Backups", account_id: accountId, keep: 1 });
+    const created = await root.call("/api/admin/backups/destinations", "POST", { id, name: "Drive", kind: "google-drive", target: "GitGood Backups", account_id: accountId, keep: 1, upload_bytes_per_second: 625_000 });
     expect(created.status).toBe(201);
-    expect(created.data).toMatchObject({ kind: "google-drive", account_email: "backups@example.com", target: "GitGood Backups" });
+    expect(created.data).toMatchObject({ kind: "google-drive", account_email: "backups@example.com", target: "GitGood Backups", upload_bytes_per_second: 625_000 });
   });
 
   test("an old rclone-style Drive target is treated as an rclone remote", async () => {
@@ -277,6 +283,8 @@ describe("Google Drive backups", () => {
 
   test("a backup uploads one verified archive to the folder, survives faults, and leaves no staging copy", async () => {
     google.faults = ["503", "partial", "401"];
+    google.receptions = [];
+    const uploadStart = performance.now();
     const started = await root.call<{ id: string }>("/api/admin/backups", "POST", { destination: id });
     expect(started.status).toBe(202);
     const job = await waitForJob(started.data.id);
@@ -288,6 +296,9 @@ describe("Google Drive backups", () => {
     expect(file.parents).toEqual([folder.id]);
     expect(file.name).toMatch(/^gitgood-backup-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-[0-9a-f-]{8}\.tar$/);
     expect(job.bytes).toBe(file.bytes.byteLength);
+    expect(google.receptions.length).toBeGreaterThan(1);
+    const transferred = google.receptions.reduce((sum, entry) => sum + entry.bytes, 0);
+    expect(performance.now() - uploadStart).toBeGreaterThanOrEqual(transferred * 1000 / 625_000 * 0.97);
     expect(file.bytes.byteLength).toBeGreaterThan(256 * 1024);
     expect(google.faults).toEqual([]);
     const listing = await new Response(Bun.spawn(["tar", "-tf", "-"], { stdin: file.bytes, stdout: "pipe" }).stdout).text();
@@ -341,11 +352,55 @@ describe("resumable upload", () => {
       },
     });
     google.faults = ["partial", "503", "401", "partial"];
-    const result = await uploadStream(tokens, "folder", "unit.tar", stream, { chunkBytes: 256 * 1024 });
+    google.receptions = [];
+    const started = performance.now();
+    const rate = 2_000_000;
+    const result = await uploadStream(tokens, "folder", "unit.tar", stream, { chunkBytes: 256 * 1024, bytesPerSecond: rate });
     expect(result.size).toBe(payload.byteLength);
     expect(result.md5).toBe(createHash("md5").update(payload).digest("hex"));
     expect(Buffer.compare(Buffer.from(google.files.get(result.id)!.bytes), Buffer.from(payload))).toBe(0);
     expect(refreshes).toBe(1);
     expect(google.faults).toEqual([]);
+    const received = google.receptions.reduce((sum, entry) => sum + entry.bytes, 0);
+    expect(received).toBeGreaterThan(payload.length);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(received * 1000 / rate * 0.97);
   }, 60_000);
+});
+
+describe("Drive upload bandwidth", () => {
+  test("the server receives paced bytes, at 5 Mbps, not an unrestricted chunk followed by a sleep", async () => {
+    google.accessTokens.add("paced-access");
+    const tokens: TokenSource = { token: async () => "paced-access", refresh: async () => "paced-access" };
+    const payload = Uint8Array.from({ length: 625_001 }, (_, i) => i % 251);
+    google.receptions = [];
+    google.faults = [];
+    const started = performance.now();
+    const result = await uploadStream(tokens, "folder", "paced.tar", new Blob([payload]).stream(), { chunkBytes: 256 * 1024, bytesPerSecond: 625_000 });
+    const elapsed = performance.now() - started;
+    expect(result.size).toBe(payload.byteLength);
+    expect(Buffer.compare(Buffer.from(google.files.get(result.id)!.bytes), Buffer.from(payload))).toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(1000);
+    expect(google.receptions.length).toBeGreaterThan(3);
+    expect(google.receptions[0]!.at - started).toBeGreaterThanOrEqual(80);
+    let received = 0;
+    for (const entry of google.receptions) {
+      received += entry.bytes;
+      expect(received).toBeLessThanOrEqual(625_000 * (entry.at - started) / 1000 + 6250);
+    }
+    expect(received).toBe(payload.byteLength);
+  }, 30_000);
+
+  test("below, at and just above a resumable chunk preserve byte counts and checksums", async () => {
+    google.accessTokens.add("boundary-access");
+    const tokens: TokenSource = { token: async () => "boundary-access", refresh: async () => "boundary-access" };
+    for (const size of [262_143, 262_144, 262_145]) {
+      const payload = Uint8Array.from({ length: size }, (_, i) => i % 251);
+      google.faults = [];
+      const result = await uploadStream(tokens, "folder", "boundary.tar", new Blob([payload]).stream(), { chunkBytes: 262_144, bytesPerSecond: 2_000_000 });
+      expect(result.size).toBe(size);
+      expect(Buffer.compare(Buffer.from(google.files.get(result.id)!.bytes), Buffer.from(payload))).toBe(0);
+      expect(result.md5).toBe(createHash("md5").update(payload).digest("hex"));
+    }
+  }, 30_000);
+
 });

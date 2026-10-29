@@ -31,7 +31,7 @@ function childEnv(destination: StoredDestination, extra: Record<string, string> 
     GITGOOD_DB_PATH: config.dbPath,
     GITGOOD_REPO_ROOT: config.repoRoot,
     GITGOOD_LFS_ROOT: config.lfsRoot,
-    GITGOOD_BACKUP_JOB_DESTINATION: JSON.stringify({ id: destination.id, name: destination.name, kind: destination.kind, target: destination.target, account_id: destination.account_id ?? null }),
+    GITGOOD_BACKUP_JOB_DESTINATION: JSON.stringify({ id: destination.id, name: destination.name, kind: destination.kind, target: destination.target, account_id: destination.account_id ?? null, upload_bytes_per_second: destination.upload_bytes_per_second }),
     ...extra,
   };
   delete env.GITGOOD_BACKUP_GOOGLE;
